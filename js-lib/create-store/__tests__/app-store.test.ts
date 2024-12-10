@@ -1,11 +1,9 @@
 import { INFINITE_ERROR_SAMPLE, INFINITE_ERROR_THRESHOLD_TIME } from '..';
 import { AppState } from '../app-state';
-import { Slice, SliceSideEffect } from '../app-state-slice';
-import {
-  ApplicationStore,
-  DeferredSideEffectsRunner,
-  SchedulerType,
-} from '../app-store';
+import type { SliceSideEffect } from '../app-state-slice';
+import { Slice } from '../app-state-slice';
+import type { SchedulerType } from '../app-store';
+import { ApplicationStore, DeferredSideEffectsRunner } from '../app-store';
 import { SliceKey } from '../slice-key';
 
 function sleep(t = 20): Promise<void> {
@@ -17,7 +15,7 @@ describe('store', () => {
     const state = AppState.create({ slices: [] });
     const store = ApplicationStore.create({ storeName: 'test-store', state });
     expect(store as any).toMatchSnapshot({
-      destroyController: expect.any(AbortController),
+      _destroyController: expect.any(AbortController),
     });
   });
 
@@ -76,7 +74,7 @@ describe('store', () => {
           value: { n: number };
         };
 
-    let state: AppState<any, any>, store: ApplicationStore<any, ActionType>;
+    let state: AppState, store: ApplicationStore<any, ActionType>;
 
     beforeEach(() => {
       const slice1 = new Slice({
@@ -87,6 +85,7 @@ describe('store', () => {
             if (action.name === 'for-a') {
               return action.value.n;
             }
+
             return value;
           },
         },
@@ -100,6 +99,7 @@ describe('store', () => {
             if (action.name === 'for-b') {
               return action.value.n;
             }
+
             return value;
           },
         },
@@ -111,7 +111,7 @@ describe('store', () => {
 
     test('sets up properly', () => {
       expect(store as any).toMatchSnapshot({
-        destroyController: expect.any(AbortController),
+        _destroyController: expect.any(AbortController),
       });
     });
 
@@ -135,10 +135,10 @@ describe('store', () => {
     });
 
     test('destroys', () => {
-      store.destroy();
-      expect((store as any).destroyed).toBe(true);
+      store?.destroy();
+      expect(store.destroyed).toBe(true);
       expect(store as any).toMatchSnapshot({
-        destroyController: expect.any(AbortController),
+        _destroyController: expect.any(AbortController),
       });
 
       let newState = AppState.create<any, ActionType>({ slices: [] });
@@ -149,7 +149,7 @@ describe('store', () => {
     test('after destroying prevent updates', () => {
       store.dispatch({ name: 'for-a', value: { n: 99 } });
       expect(key1.getSliceState(store.state)).toBe(99);
-      store.destroy();
+      store?.destroy();
       store.dispatch({ name: 'for-a', value: { n: 100 } });
       expect(key1.getSliceState(store.state)).toBe(99);
 
@@ -163,7 +163,7 @@ describe('store', () => {
     const key2 = new SliceKey<number>('two');
 
     const setup = (effects1: any) => {
-      let state: AppState<any, any>, store: ApplicationStore<any>;
+      let state: AppState, store: ApplicationStore;
 
       const slice1 = new Slice({
         key: key1,
@@ -173,6 +173,7 @@ describe('store', () => {
             if (action.name === 'for-a') {
               return action.value;
             }
+
             return value;
           },
         },
@@ -187,6 +188,7 @@ describe('store', () => {
             if (action.name === 'for-b') {
               return action.value;
             }
+
             return value;
           },
         },
@@ -224,7 +226,7 @@ describe('store', () => {
       expect(key1.getSliceState(originalState)).toBe(1);
       expect(key1.getSliceState(store.state)).toBe(100);
 
-      store.destroy();
+      store?.destroy();
       expect(destroy).toBeCalledTimes(1);
     });
 
@@ -254,6 +256,7 @@ describe('store', () => {
             if (action.name === 'for-a') {
               return action.value.no;
             }
+
             return value;
           },
         },
@@ -292,12 +295,12 @@ describe('store', () => {
       expect(sideEffect1Update).nthCalledWith(1, store, prevState, 100, 1);
 
       expect(sideEffect2Value).toMatchInlineSnapshot(`
-        Object {
-          "curValue": Object {
+        {
+          "curValue": {
             "key1": 100,
             "key2": 2,
           },
-          "prevValue": Object {
+          "prevValue": {
             "key1": 1,
             "key2": 2,
           },
@@ -373,7 +376,7 @@ describe('store', () => {
         },
       });
 
-      let seenStates: [number, number][] = [];
+      let seenStates: Array<[number, number]> = [];
 
       const slice2 = new Slice({
         key: key2,
@@ -385,6 +388,7 @@ describe('store', () => {
             if (action.name === 'action::mark-ready') {
               return state + 1;
             }
+
             return state;
           },
         },
@@ -432,6 +436,7 @@ describe('store', () => {
             if (action.name === 'for-a') {
               return action.value.no;
             }
+
             return value;
           },
         },
@@ -446,6 +451,7 @@ describe('store', () => {
             if (action.name === 'for-b') {
               return action.value.no;
             }
+
             return value;
           },
         },
@@ -478,7 +484,7 @@ describe('store', () => {
       expect(update1).nthCalledWith(1, store, originalState, 77, 2);
       expect(update2).nthCalledWith(1, store, originalState, 77, 2);
 
-      store.destroy();
+      store?.destroy();
       expect(destroy2).toBeCalledTimes(1);
       expect(destroy1).toBeCalledTimes(1);
     });
@@ -511,6 +517,7 @@ describe('store', () => {
             if (action.name === 'for-a') {
               return action.value.data;
             }
+
             return value;
           },
         },
@@ -529,6 +536,7 @@ describe('store', () => {
             if (action.name === 'for-b') {
               return action.value.data;
             }
+
             return value;
           },
         },
@@ -607,7 +615,7 @@ describe('store', () => {
         },
       });
       expect(store as any).toMatchSnapshot({
-        destroyController: expect.any(AbortController),
+        _destroyController: expect.any(AbortController),
       });
       expect(sideEffect).toBeCalledTimes(1);
       store.dispatch({
@@ -619,9 +627,7 @@ describe('store', () => {
     describe('deferred for single slice', () => {
       const setup = (
         scheduler: SchedulerType,
-        deferredUpdate: ReturnType<
-          SliceSideEffect<any, any, any>
-        >['deferredUpdate'],
+        deferredUpdate: ReturnType<SliceSideEffect<any, any>>['deferredUpdate'],
       ) => {
         const sideEffect = jest.fn(() => ({
           deferredUpdate,
@@ -649,6 +655,7 @@ describe('store', () => {
           state: state,
           scheduler,
         });
+
         return {
           counterKey,
           store,
@@ -692,6 +699,7 @@ describe('store', () => {
         let cancelScheduler = jest.fn(() => {});
         const scheduler = jest.fn((cb) => {
           cb();
+
           return cancelScheduler;
         });
 
@@ -730,6 +738,7 @@ describe('store', () => {
           cancelScheduler = jest.fn(() => {
             task = undefined;
           });
+
           return cancelScheduler;
         });
 
@@ -851,6 +860,7 @@ describe('store', () => {
                 cb();
               }
             });
+
             return () => {
               destroyed = true;
             };
@@ -912,6 +922,7 @@ describe('store', () => {
               cb();
             }
           });
+
           return () => {
             destroyed = true;
           };
@@ -919,7 +930,7 @@ describe('store', () => {
       });
 
       store.dispatch({ name: 'something' });
-      store.destroy();
+      store?.destroy();
 
       expect(destroy1).toBeCalledTimes(1);
       expect(destroy2).toBeCalledTimes(1);
@@ -948,6 +959,7 @@ describe('store', () => {
             if (action.name === 'for-a') {
               return action.value.n;
             }
+
             return value;
           },
         },
@@ -987,6 +999,7 @@ describe('store', () => {
             if (action.name === 'for-b') {
               return action.value.z.i;
             }
+
             return value;
           },
         },
@@ -1169,6 +1182,7 @@ describe('store', () => {
             if (action.name === 'for-a') {
               return action.value;
             }
+
             return value;
           },
         },
@@ -1269,24 +1283,27 @@ describe('store', () => {
       });
     });
 
-    test('error propogates in correct order', () => {
+    test('error propagates in correct order', () => {
       let callOrder = '';
       const errorHandler1 = jest.fn(() => {
         callOrder += '1';
+
         return false;
       });
       const errorHandler2 = jest.fn(() => {
         callOrder += '2';
+
         return false;
       });
       const errorHandler3 = jest.fn(() => {
         callOrder += '3';
-        return false;
-      });
-      const rootErrorHandler = jest.fn((error, store) => {
-        callOrder += 'root';
 
         return false;
+      });
+      const rootErrorHandler = jest.fn((error, store: ApplicationStore) => {
+        callOrder += 'root';
+
+        return store.runSliceErrorHandlers(error);
       });
 
       const { store } = setup({
@@ -1313,17 +1330,20 @@ describe('store', () => {
       let callOrder = '';
       const errorHandler1 = jest.fn(() => {
         callOrder += '1';
+
         return false;
       });
       const errorHandler2 = jest.fn(() => {
         callOrder += '2';
+
         return false;
       });
       const errorHandler3 = jest.fn(() => {
         callOrder += '3';
+
         return false;
       });
-      const rootErrorHandler = jest.fn((error, store) => {
+      const rootErrorHandler = jest.fn((error, store: ApplicationStore) => {
         callOrder += 'root';
 
         return true;
@@ -1356,20 +1376,23 @@ describe('store', () => {
       let callOrder = '';
       const errorHandler1 = jest.fn(() => {
         callOrder += '1';
+
         return true;
       });
       const errorHandler2 = jest.fn(() => {
         callOrder += '2';
+
         return false;
       });
       const errorHandler3 = jest.fn(() => {
         callOrder += '3';
-        return false;
-      });
-      const rootErrorHandler = jest.fn((error, store) => {
-        callOrder += 'root';
 
         return false;
+      });
+      const rootErrorHandler = jest.fn((error, store: ApplicationStore) => {
+        callOrder += 'root';
+
+        return store.runSliceErrorHandlers(error);
       });
 
       const { store } = setup({
@@ -1416,6 +1439,7 @@ describe('store', () => {
             if (action.name === 'for-a') {
               return action.value;
             }
+
             return value;
           },
         },
@@ -1482,6 +1506,7 @@ describe('store', () => {
               cb();
             }
           });
+
           return () => {
             destroyed = true;
           };
@@ -1496,19 +1521,23 @@ describe('store', () => {
       let handlerCallOrder = '';
       const errorHandler1 = jest.fn(() => {
         handlerCallOrder += '1';
+
         return false;
       });
       const errorHandler2 = jest.fn(() => {
         handlerCallOrder += '2';
+
         return true;
       });
       const errorHandler3 = jest.fn(() => {
         handlerCallOrder += '3';
+
         return false;
       });
-      const rootErrorHandler = jest.fn((error, store) => {
+      const rootErrorHandler = jest.fn((error, store: ApplicationStore) => {
         handlerCallOrder += 'root';
-        return false;
+
+        return store.runSliceErrorHandlers(error);
       });
 
       const { store, deferredCalls } = setup({
@@ -1565,6 +1594,7 @@ describe('store', () => {
             if (action.name === 'for-a') {
               return action.value;
             }
+
             return value;
           },
         },
@@ -1630,6 +1660,7 @@ describe('store', () => {
               cb();
             }
           });
+
           return () => {
             destroyed = true;
           };
@@ -1650,19 +1681,23 @@ describe('store', () => {
       let handlerCallOrder = '';
       const errorHandler1 = jest.fn(() => {
         handlerCallOrder += '1';
+
         return false;
       });
       const errorHandler2 = jest.fn(() => {
         handlerCallOrder += '2';
+
         return true;
       });
       const errorHandler3 = jest.fn(() => {
         handlerCallOrder += '3';
+
         return false;
       });
-      const rootErrorHandler = jest.fn((error, store) => {
+      const rootErrorHandler = jest.fn((error, store: ApplicationStore) => {
         handlerCallOrder += 'root';
-        return false;
+
+        return store.runSliceErrorHandlers(error);
       });
 
       const { store, deferredCalls } = setup({
@@ -1687,6 +1722,82 @@ describe('store', () => {
     });
   });
 
+  describe('deferred once', () => {
+    test('when store is destroyed, deferredOnce abortSignal is called', () => {
+      const key1 = new SliceKey<number, any>('one');
+
+      const onAbort = jest.fn();
+      const deferredOnce = jest.fn();
+      const slice1 = new Slice({
+        key: key1,
+        state: {
+          init: () => 1,
+          apply: (action, value, appState) => {
+            if (action.name === 'for-a') {
+              return action.value;
+            }
+
+            return value;
+          },
+        },
+        sideEffect() {
+          return {
+            deferredOnce(_, signal) {
+              deferredOnce();
+              signal.addEventListener(
+                'abort',
+                () => {
+                  onAbort();
+                },
+                {
+                  once: true,
+                },
+              );
+            },
+          };
+        },
+      });
+
+      let state = AppState.create({
+        slices: [slice1],
+      });
+
+      let store = ApplicationStore.create({
+        storeName: 'test-store',
+        state,
+        scheduler: (cb) => {
+          let destroyed = false;
+          Promise.resolve().then(() => {
+            if (!destroyed) {
+              cb();
+            }
+          });
+
+          return () => {
+            destroyed = true;
+          };
+        },
+      });
+
+      expect(deferredOnce).toBeCalledTimes(1);
+      expect(onAbort).not.toBeCalled();
+
+      store.dispatch({ name: 'for-a', value: { n: 99 } });
+      expect(onAbort).not.toBeCalled();
+
+      expect(key1.getSliceStateAsserted(store.state)).toEqual({ n: 99 });
+
+      store?.destroy();
+
+      store.dispatch({ name: 'for-a', value: { n: 19 } });
+
+      expect(onAbort).toBeCalledTimes(1);
+      expect(deferredOnce).toBeCalledTimes(1);
+
+      expect(key1.getSliceStateAsserted(store.state)).toEqual({ n: 99 });
+    });
+  });
+
   describe('infinite errors', () => {
     test('throws error if many errors are thrown in short span', () => {
       let state = AppState.create({
@@ -1704,6 +1815,7 @@ describe('store', () => {
               cb();
             }
           });
+
           return () => {
             destroyed = true;
           };
@@ -1742,6 +1854,7 @@ describe('store', () => {
               cb();
             }
           });
+
           return () => {
             destroyed = true;
           };
@@ -1797,6 +1910,7 @@ describe('DeferredSideEffectsRunner', () => {
     let deferredUpdate = jest.fn(() => {});
     let scheduler = jest.fn((cb) => {
       task = cb;
+
       return () => ({});
     });
     const runner = new DeferredSideEffectsRunner(
@@ -1821,6 +1935,7 @@ describe('DeferredSideEffectsRunner', () => {
     let deferredUpdate = jest.fn(() => {});
     let scheduler = jest.fn((cb) => {
       task = cb;
+
       return () => ({});
     });
     let initialState = { initialState: 'i am initial state' };
@@ -1864,5 +1979,188 @@ describe('DeferredSideEffectsRunner', () => {
       prevState1,
       expect.any(AbortSignal),
     );
+  });
+});
+
+describe('reactors', () => {
+  const slice1Key = new SliceKey<
+    { count: number; magicString: string },
+    {
+      name: 'change-count';
+      value: {};
+    }
+  >('slice-1');
+
+  const makeSlice1 = (reactors: Array<ReturnType<typeof slice1Key.reactor>>) =>
+    new Slice({
+      key: slice1Key,
+      state: {
+        init() {
+          return { count: 1, magicString: 'hello' };
+        },
+        apply: (action, value) => {
+          if (action.name === 'change-count') {
+            return {
+              ...value,
+              count: value.count + 1,
+            };
+          }
+
+          return value;
+        },
+      },
+      sideEffect: [...reactors],
+    });
+
+  const slice2Key = new SliceKey<
+    { toggle: boolean; someString: string; someNumber: number },
+    | {
+        name: 'toggle-action';
+        value: {};
+      }
+    | {
+        name: 'change-some-string';
+        value: {
+          someString: string;
+        };
+      }
+  >('slice-1');
+
+  const makeSlice2 = (reactors: Array<ReturnType<typeof slice2Key.reactor>>) =>
+    new Slice({
+      key: slice2Key,
+      state: {
+        init() {
+          return { toggle: false, someString: 'hello', someNumber: 1 };
+        },
+        apply: (action, value) => {
+          if (action.name === 'toggle-action') {
+            return {
+              ...value,
+              toggle: !value.toggle,
+            };
+          } else if (action.name === 'change-some-string') {
+            return {
+              ...value,
+              someString: action.value.someString,
+            };
+          }
+
+          return value;
+        },
+      },
+      sideEffect: [...reactors],
+    });
+
+  test('one slice test', () => {
+    let reactor1Call = jest.fn();
+
+    const slice1 = makeSlice1([
+      slice1Key.reactor(
+        {
+          count: slice1Key.select('count'),
+        },
+        reactor1Call,
+      ),
+    ]);
+
+    const state = AppState.create({ slices: [slice1] });
+    const store = ApplicationStore.create({
+      storeName: 'test-store',
+      state,
+    });
+
+    store.dispatch({
+      name: 'change-count',
+      value: {},
+    });
+
+    expect(reactor1Call).toBeCalledTimes(1);
+    expect(reactor1Call).nthCalledWith(1, store.state, store.dispatch, {
+      count: 2,
+    });
+  });
+
+  test('with two slices', () => {
+    let reactor2Call = jest.fn();
+    let reactor21Call = jest.fn();
+
+    const slice1 = makeSlice1([]);
+
+    const slice2 = makeSlice2([
+      slice2Key.reactor(
+        {
+          count: slice1Key.select('count'),
+          toggle: slice2Key.select('toggle'),
+        },
+        reactor2Call,
+      ),
+
+      slice2Key.reactor(
+        {
+          count: slice1Key.select('count'),
+          someString: slice2Key.select('someString'),
+        },
+        reactor21Call,
+      ),
+    ]);
+
+    const state = AppState.create({ slices: [slice1, slice2] as Slice[] });
+    const store = ApplicationStore.create({
+      storeName: 'test-store',
+      state,
+    });
+
+    store.dispatch({
+      name: 'toggle-action',
+      value: {},
+    });
+
+    expect(reactor2Call).toBeCalledTimes(1);
+    expect(reactor2Call).nthCalledWith(1, store.state, store.dispatch, {
+      count: 1,
+      toggle: true,
+    });
+
+    // this reactor should not be called as its dependencies are not changed
+    expect(reactor21Call).toBeCalledTimes(0);
+
+    store.dispatch({
+      name: 'toggle-action',
+      value: {},
+    });
+
+    expect(reactor2Call).toBeCalledTimes(2);
+    expect(reactor2Call).nthCalledWith(2, store.state, store.dispatch, {
+      count: 1,
+      toggle: false,
+    });
+    // now actually changing the dependency
+    expect(reactor21Call).toBeCalledTimes(0);
+    store.dispatch({
+      name: 'change-some-string',
+      value: {
+        someString: 'world',
+      },
+    });
+
+    expect(reactor2Call).toBeCalledTimes(2);
+    expect(reactor21Call).toBeCalledTimes(1);
+
+    expect(reactor21Call).nthCalledWith(1, store.state, store.dispatch, {
+      someString: 'world',
+      count: 1,
+    });
+
+    // if we change the dependency again, the reactor should not be called again
+    store.dispatch({
+      name: 'change-some-string',
+      value: {
+        someString: 'world',
+      },
+    });
+
+    expect(reactor21Call).toBeCalledTimes(1);
+    expect(reactor2Call).toBeCalledTimes(2);
   });
 });

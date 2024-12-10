@@ -19,7 +19,7 @@
             "name": "Debug current file",
             "type": "node",
             "request": "launch",
-            "runtimeVersion": "16.13.0",
+            "runtimeVersion": "18.12.1",
             "runtimeExecutable": "yarn",
             "skipFiles": [
                 "<node_internals>/**",
@@ -28,7 +28,7 @@
             "runtimeArgs": [
                 "--inspect-brk",
                 "jest",
-                "${fileBasenameNoExtension}",
+                "${fileDirname}/${fileBasenameNoExtension}",
                 "--runInBand",
                 "--debug",
                 "--testTimeout=60000"

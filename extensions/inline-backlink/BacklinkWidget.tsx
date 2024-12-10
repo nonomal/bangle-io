@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { nsmApi2 } from '@bangle.io/api';
+import { isAbortError } from '@bangle.io/mini-js-utils';
 import type { HighlightTextType, SearchMatch } from '@bangle.io/search-pm-node';
-import { useEditorManagerContext } from '@bangle.io/slice-editor-manager';
-import { pushWsPath, useWorkspaceContext } from '@bangle.io/slice-workspace';
 import {
   ButtonIcon,
   ChevronDownIcon,
@@ -10,13 +10,14 @@ import {
   Sidebar,
 } from '@bangle.io/ui-components';
 import {
-  removeMdExtension,
+  cx,
+  getMouseClickType,
+  MouseClick,
   safeCancelIdleCallback,
   safeRequestIdleCallback,
-  useClickToNote,
 } from '@bangle.io/utils';
 import { naukarProxy } from '@bangle.io/worker-naukar-proxy';
-import { resolvePath } from '@bangle.io/ws-path';
+import { createWsPath, removeExtension, resolvePath } from '@bangle.io/ws-path';
 
 const IconStyle = {
   height: 16,
@@ -25,24 +26,32 @@ const IconStyle = {
 
 interface BacklinkSearchResult {
   wsPath: string;
-  matches: Array<SearchMatch>;
+  matches: SearchMatch[];
 }
 
 export function BacklinkWidget() {
   const backlinkSearchResult = useBacklinkSearch();
-  const { bangleStore } = useWorkspaceContext();
-  const _pushWsPath: (...args: Parameters<typeof pushWsPath>) => void =
-    useCallback(
-      (wsPath, newTab, secondary) => {
-        pushWsPath(
-          wsPath,
-          newTab,
-          secondary,
-        )(bangleStore.state, bangleStore.dispatch);
-      },
-      [bangleStore],
-    );
-  const makeOnClick = useClickToNote(_pushWsPath);
+
+  const makeOnClick = useCallback((_path?: string) => {
+    return (event: React.MouseEvent<any>) => {
+      if (!_path) {
+        return;
+      }
+
+      const wsPath = createWsPath(_path);
+
+      const clickType = getMouseClickType(event);
+
+      if (clickType === MouseClick.NewTab) {
+        nsmApi2.workspace.openWsPathInNewTab(wsPath);
+      } else if (clickType === MouseClick.ShiftClick) {
+        nsmApi2.workspace.pushSecondaryWsPath(wsPath);
+      } else {
+        nsmApi2.workspace.pushPrimaryWsPath(wsPath);
+      }
+    };
+  }, []);
+
   const [openedItems, updateOpenedItems] = useState(() => new Set<string>());
   const isCollapsed = useCallback(
     (r: BacklinkSearchResult) => {
@@ -52,7 +61,10 @@ export function BacklinkWidget() {
   );
 
   return (
-    <div className="inline-backlink_widget-container flex flex-col">
+    <div
+      data-testid="inline-backlink_widget-container"
+      className="flex flex-col"
+    >
       {!backlinkSearchResult || backlinkSearchResult.length === 0 ? (
         <span>
           🐒 No backlinks found!
@@ -82,10 +94,12 @@ export function BacklinkWidget() {
                           if (items.has(r.wsPath)) {
                             const clone = new Set(items);
                             clone.delete(r.wsPath);
+
                             return clone;
                           } else {
                             const clone = new Set(items);
                             clone.add(r.wsPath);
+
                             return clone;
                           }
                         });
@@ -101,12 +115,12 @@ export function BacklinkWidget() {
                     </ButtonIcon>
                   ),
                   rightNode: (
-                    <ButtonIcon className="text-xs font-semibold rounded inline-backlink_widget-occurrence-count">
+                    <ButtonIcon className="text-xs font-semibold rounded bg-colorNeutralSolidFaint px-1">
                       {r.matches.length}
                     </ButtonIcon>
                   ),
                   rightHoverNode: (
-                    <ButtonIcon className="text-xs font-semibold rounded inline-backlink_widget-occurrence-count">
+                    <ButtonIcon className="text-xs font-semibold rounded bg-colorNeutralSolidFaint px-1">
                       {r.matches.length}
                     </ButtonIcon>
                   ),
@@ -117,11 +131,11 @@ export function BacklinkWidget() {
                   <Sidebar.Row2
                     key={j}
                     className={
-                      'search-result-text-match ml-1 pl-3 rounded ' +
+                      'B-search-notes_search-result-text-match ml-1 pl-3 rounded ' +
                       (j === 0 ? 'mt-0' : 'mt-1')
                     }
                     onClick={makeOnClick(r.wsPath)}
-                    titleClassName="text-sm "
+                    titleClassName="text-sm"
                     item={{
                       uid: 'search-result-text-match-' + j,
                       title: <HighlightText highlightText={matchObj.match} />,
@@ -137,8 +151,9 @@ export function BacklinkWidget() {
 }
 
 function useBacklinkSearch(): BacklinkSearchResult[] | undefined {
-  const { focusedEditorId } = useEditorManagerContext();
-  const { wsName, openedWsPaths } = useWorkspaceContext();
+  const { focusedEditorId } = nsmApi2.editor.useEditor();
+  const { wsName, openedWsPaths } = nsmApi2.workspace.useWorkspace();
+
   const [results, updateResults] = useState<BacklinkSearchResult[] | undefined>(
     undefined,
   );
@@ -148,8 +163,7 @@ function useBacklinkSearch(): BacklinkSearchResult[] | undefined {
       if (!wsName) {
         return;
       }
-
-      naukarProxy
+      naukarProxy.abortable
         .abortableSearchWsForPmNode(controller.signal, wsName, 'backlink:*', [
           {
             nodeName: 'wikiLink',
@@ -161,7 +175,7 @@ function useBacklinkSearch(): BacklinkSearchResult[] | undefined {
         ])
         .then(
           (result) => {
-            const fileName = removeMdExtension(
+            const fileName = removeExtension(
               resolvePath(focusedWsPath).fileName,
             );
 
@@ -170,9 +184,11 @@ function useBacklinkSearch(): BacklinkSearchResult[] | undefined {
                 .map((r) => {
                   const newMatches = r.matches.filter((match) => {
                     const [, highlightTextMatch] = match.match;
+
                     if (highlightTextMatch) {
                       return highlightTextMatch.includes(fileName);
                     }
+
                     return false;
                   });
 
@@ -185,9 +201,10 @@ function useBacklinkSearch(): BacklinkSearchResult[] | undefined {
             );
           },
           (error) => {
-            if (error instanceof DOMException && error.name === 'AbortError') {
+            if (isAbortError(error)) {
               return;
             }
+
             throw error;
           },
         );
@@ -199,6 +216,7 @@ function useBacklinkSearch(): BacklinkSearchResult[] | undefined {
     if (focusedEditorId != null) {
       return openedWsPaths.getByIndex(focusedEditorId);
     }
+
     return undefined;
   }, [openedWsPaths, focusedEditorId]);
 
@@ -215,6 +233,7 @@ function useBacklinkSearch(): BacklinkSearchResult[] | undefined {
 
     return () => {
       controller.abort();
+
       if (cb) {
         safeCancelIdleCallback(cb);
       }
@@ -230,9 +249,12 @@ function HighlightText({
   highlightText: HighlightTextType;
 }) {
   return (
-    <div className="highlight-text-container">
+    <div className="B-inline-backlink_highlight-text-container">
       {highlightText.map((t, i) => (
-        <span key={i} className="highlight-text text-sm">
+        <span
+          key={i}
+          className={cx(i % 2 === 1 && 'bg-colorPromoteSolidFaint', 'text-sm')}
+        >
           {t}
         </span>
       ))}

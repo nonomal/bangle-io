@@ -1,33 +1,43 @@
-import { readFileAsText } from '@bangle.io/baby-fs';
-import {
-  getWorkspaceInfo,
-  getWorkspaceMetadata,
-  getWsName,
-  workspaceSliceKey,
-} from '@bangle.io/slice-workspace';
+import { internalApi } from '@bangle.io/api';
+import type { WsName } from '@bangle.io/shared-types';
+import { getExtension } from '@bangle.io/ws-path';
 
+import type { GithubWsMetadata } from './common';
 import { GITHUB_STORAGE_PROVIDER_NAME } from './common';
 
-export const readGithubTokenFromStore = () => {
-  return workspaceSliceKey.queryOp((state) => {
-    const wsName = getWsName()(state);
+export async function readGhWorkspaceMetadata(
+  wsName: WsName,
+): Promise<GithubWsMetadata | undefined> {
+  const info = await internalApi.workspace.readWorkspaceInfo(wsName);
 
-    if (wsName) {
-      const wsInfo = getWorkspaceInfo(wsName)(state);
-
-      if (wsInfo && wsInfo.type === GITHUB_STORAGE_PROVIDER_NAME) {
-        let metadata = getWorkspaceMetadata(wsName)(state);
-        return metadata?.githubToken as string | undefined;
-      }
-    }
+  if (!info || info.type !== GITHUB_STORAGE_PROVIDER_NAME) {
     return undefined;
-  });
-};
+  }
 
-export async function getVanilaFileSha(file: File) {
-  const buffer = await crypto.subtle.digest('SHA-1', await file.arrayBuffer());
-  const sha = Array.from(new Uint8Array(buffer))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-  return sha;
+  return info.metadata as Promise<GithubWsMetadata | undefined>;
+}
+
+/**
+ * Returns a new unique wsPath for the given wsPath following
+ * postfixed with `-conflict-<number>`.
+ *
+ * @param wsPath
+ * @returns
+ */
+export function getNonConflictName(wsPath: string): string {
+  const ext = getExtension(wsPath) || '';
+
+  let pathWithoutExt = wsPath.slice(0, -1 * ext.length);
+
+  if (/-conflict-\d+$/.test(pathWithoutExt)) {
+    pathWithoutExt = pathWithoutExt.slice(
+      0,
+      -1 *
+        pathWithoutExt.slice(pathWithoutExt.lastIndexOf('-conflict-')).length,
+    );
+  }
+
+  const rNumber = Date.now();
+
+  return pathWithoutExt + `-conflict-${rNumber}` + ext;
 }

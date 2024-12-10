@@ -1,22 +1,9 @@
-.bangle-io-emoji-suggest-container {
-  background-color: var(--window-bgColor-1);
-}
-
-.bangle-emoji-suggest {
-  color: var(--textColor-0);
-  background-color: var(--window-bgColor-1);
-  /* width: 500px; */
-  border: 0;
-}
-
-.bangle-io-palette-info {
-  background-color: var(--window-bgColor-1);
-}
-
+/* stylelint-disable-next-line selector-class-pattern */
 .bangle-emoji-suggest-container .bangle-emoji-square.bangle-is-selected {
-  background-color: var(--accent-primary-1);
+  background-color: var(--BV-colorPromoteSolidSubdued);
 }
 
+/* stylelint-disable-next-line selector-class-pattern */
 .bangle-emoji-suggest-container .bangle-emoji-square:hover {
-  background-color: var(--accent-secondary);
+  background-color: var(--BV-colorNeutralSolidFaint);
 }

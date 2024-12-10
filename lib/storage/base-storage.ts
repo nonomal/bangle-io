@@ -1,5 +1,6 @@
-import { SpecRegistry } from '@bangle.dev/core';
-import type { Node } from '@bangle.dev/pm';
+import type { SpecRegistry } from '@bangle.dev/core';
+
+import type { StorageProviderOnChange } from '@bangle.io/shared-types';
 
 export type WsPath = string;
 export type WsName = string;
@@ -16,9 +17,13 @@ export interface FileStat {
 }
 
 export interface StorageOpts {
+  // TODO why do we need spec-registry here?
   specRegistry: SpecRegistry;
-  readWorkspaceMetadata: () => { [key: string]: any };
-  updateWorkspaceMetadata: (metadata: { [key: string]: any }) => void;
+  readWorkspaceMetadata: (wsName: string) => Promise<{ [key: string]: any }>;
+  updateWorkspaceMetadata: (
+    wsName: string,
+    metadata: { [key: string]: any },
+  ) => Promise<void>;
 }
 
 export interface BaseStorageProvider {
@@ -28,35 +33,52 @@ export interface BaseStorageProvider {
   readonly hidden?: boolean;
   readonly name: string;
 
-  createFile(wsPath: WsPath, file: File, opts: StorageOpts): Promise<void>;
+  onChange: StorageProviderOnChange;
 
-  deleteFile(wsPath: WsPath, opts: StorageOpts): Promise<void>;
+  isSupported: () => boolean;
 
-  fileExists(wsPath: WsPath, opts: StorageOpts): Promise<boolean>;
+  // StorageProvider is run in various contexts like worker, main thread, etc.
+  // This method will be called when an error needs to be serialized and forwarded to the main thread.
+  serializeError: (error: Error) => string | undefined;
+  parseError: (errorString: string) => Error | undefined;
 
-  fileStat(wsPath: WsPath, opts: StorageOpts): Promise<FileStat>;
+  createFile: (wsPath: WsPath, file: File, opts: StorageOpts) => Promise<void>;
 
-  readFile(wsPath: WsPath, opts: StorageOpts): Promise<File | undefined>;
+  deleteFile: (wsPath: WsPath, opts: StorageOpts) => Promise<void>;
 
-  listAllFiles(
+  fileExists: (wsPath: WsPath, opts: StorageOpts) => Promise<boolean>;
+
+  fileStat: (wsPath: WsPath, opts: StorageOpts) => Promise<FileStat>;
+
+  readFile: (wsPath: WsPath, opts: StorageOpts) => Promise<File | undefined>;
+
+  listAllFiles: (
     abortSignal: AbortSignal,
     wsName: WsName,
     opts: StorageOpts,
-  ): Promise<WsPath[]>;
+  ) => Promise<WsPath[]>;
 
   // return any metadata associated with this newly created workspace
-  newWorkspaceMetadata(
+  newWorkspaceMetadata: (
     wsName: string,
     createOpts: any,
-  ): Promise<{ [key: string]: any }> | Promise<void> | void;
+  ) => Promise<{ [key: string]: any }> | Promise<void>;
 
-  renameFile(
+  renameFile: (
     wsPath: WsPath,
     newWsPath: WsPath,
     opts: StorageOpts,
-  ): Promise<void>;
+  ) => Promise<void>;
 
-  writeFile(wsPath: WsPath, file: File, opts: StorageOpts): Promise<void>;
+  /**
+   * sha - gitsha of the file
+   */
+  writeFile: (
+    wsPath: WsPath,
+    file: File,
+    opts: StorageOpts,
+    sha?: string,
+  ) => Promise<void>;
 
   searchFile?: (
     abortSignal: AbortSignal,
@@ -64,5 +86,5 @@ export interface BaseStorageProvider {
     opts: StorageOpts,
   ) => Promise<WsPath[]>;
 
-  searchText?: () => void;
+  searchText?: () => Promise<void>;
 }

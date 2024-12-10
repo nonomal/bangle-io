@@ -1,22 +1,20 @@
 import React, { useCallback } from 'react';
 
-import {
-  BaseRawNodeSpec,
-  domSerializationHelpers,
-  NodeView,
-  RawSpecs,
-} from '@bangle.dev/core';
+import type { BaseRawNodeSpec, RawSpecs } from '@bangle.dev/core';
+import { domSerializationHelpers, NodeView } from '@bangle.dev/core';
 import { inlineNodeParser } from '@bangle.dev/markdown';
-import { EditorState, EditorView, keymap } from '@bangle.dev/pm';
+import type { EditorState, EditorView } from '@bangle.dev/pm';
+import { keymap } from '@bangle.dev/pm';
 
-import { RenderReactNodeView } from '@bangle.io/extension-registry';
+import { nsmApi2, useSerialOperationContext } from '@bangle.io/api';
+import type { RenderReactNodeView } from '@bangle.io/extension-registry';
 import {
   inlinePalette,
   queryInlinePaletteActive,
   queryInlinePaletteText,
   replaceSuggestionMarkWith,
 } from '@bangle.io/inline-palette';
-import { useSerialOperationContext } from '@bangle.io/serial-operation-context';
+import { assertNotUndefined } from '@bangle.io/utils';
 
 import {
   BANNED_CHARS,
@@ -100,6 +98,9 @@ function breakTag(key: string) {
           )(state, dispatch, view);
         }
         const nodeType = state.schema.nodes[tagNodeName];
+
+        assertNotUndefined(nodeType, 'tag nodeType must be defined');
+
         return replaceSuggestionMarkWith(
           palettePluginKey,
           nodeType.create({
@@ -109,11 +110,13 @@ function breakTag(key: string) {
 
         // return false;
       }
+
       return replaceSuggestionMarkWith(
         palettePluginKey,
         state.schema.text('#' + text + key),
       )(state, dispatch, view);
     }
+
     return false;
   };
 }
@@ -144,13 +147,6 @@ export function editorTagSpec(): RawSpecs {
     },
     markdown: {
       toMarkdown: (state, node) => {
-        // check if there is no white space
-        if (!state.out.endsWith(' ') && state.out !== '') {
-          // prefix with whitespace so that tags
-          // don't get fused to the previous node
-          state.out += ' ';
-        }
-
         const { tagValue } = node.attrs;
         state.text('#' + tagValue, false);
       },
@@ -161,6 +157,7 @@ export function editorTagSpec(): RawSpecs {
             if (typeof tok.payload === 'string') {
               return { tagValue: tok.payload };
             }
+
             return { tagValue: undefined };
           },
           noCloseToken: true,
@@ -168,6 +165,7 @@ export function editorTagSpec(): RawSpecs {
       },
     },
   };
+
   return [
     inlinePalette.spec({ markName: paletteMarkName, trigger: TRIGGER }),
     spec,
@@ -178,14 +176,24 @@ export function noteTagsMarkdownItPlugin(md: any) {
   inlineNodeParser(md, {
     tokenName: 'note_tag',
     regex: MARKDOWN_REGEX,
-    getTokenDetails: (match) => {
+    getTokenDetails: (match, offset, srcText) => {
+      let whiteSpaceBefore = false;
+
       if (USING_INFERIOR_REGEX) {
         // see the explanation in the source file of regex
         // due to the inferior regex for safari we get an extra whitespace
         // in the match
-        match = match.trim();
+        if (match[0] === ' ') {
+          match = match.slice(1);
+          whiteSpaceBefore = true;
+        }
       }
-      return { payload: match.slice(1), markup: match.slice(1) };
+
+      return {
+        payload: match.slice(1),
+        markup: match.slice(1),
+        whiteSpaceBefore,
+      };
     },
   });
 }
@@ -198,16 +206,12 @@ export const renderReactNodeView: RenderReactNodeView = {
 
 function TagComponent({ tagValue }: { tagValue: string }) {
   const { dispatchSerialOperation } = useSerialOperationContext();
-
   const onClick = useCallback(() => {
-    dispatchSerialOperation({
-      name: 'operation::@bangle.io/search-notes:execute-search',
-      value: `tag:${tagValue}`,
-    });
+    nsmApi2.editor.searchByTag(dispatchSerialOperation, tagValue);
   }, [tagValue, dispatchSerialOperation]);
 
   return (
-    <span className="inline-note-tag" onClick={onClick}>
+    <span className="B-note-tags_inline-note-tag" onClick={onClick}>
       #{tagValue}
     </span>
   );

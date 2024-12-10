@@ -1,7 +1,8 @@
 import { heading } from '@bangle.dev/base-components';
 import type { SpecRegistry } from '@bangle.dev/core';
 import * as markdown from '@bangle.dev/markdown';
-import { Fragment, Node, Slice } from '@bangle.dev/pm';
+import type { Node } from '@bangle.dev/pm';
+import { Fragment, Slice } from '@bangle.dev/pm';
 import { findChildren } from '@bangle.dev/utils';
 
 const { flattenFragmentJSON } = heading;
@@ -17,6 +18,7 @@ const setupSerializer = () => {
       log('setting up serializer');
       _serializer = markdown.markdownSerializer(specRegistry);
     }
+
     return _serializer;
   };
 };
@@ -28,7 +30,7 @@ const setupGetParser = () => {
   ) => {
     log('setting up parser');
     let tokenizer = markdown.getDefaultMarkdownItTokenizer();
-    markdownItPlugins.forEach((plugin) => {
+    markdownItPlugins.forEach((plugin: any) => {
       // to allow passing of plugin options
       if (Array.isArray(plugin)) {
         tokenizer = tokenizer.use(...plugin);
@@ -36,6 +38,7 @@ const setupGetParser = () => {
         tokenizer = tokenizer.use(plugin);
       }
     });
+
     return markdown.markdownParser(specRegistry, tokenizer);
   };
 
@@ -65,13 +68,15 @@ export const markdownParser = (
   specRegistry: SpecRegistry,
   markdownItPlugins: any[],
 ) => {
-  return getParser(specRegistry, markdownItPlugins).parse(markdownStr);
+  const parser = getParser(specRegistry, markdownItPlugins);
+
+  return parser?.parse(markdownStr) ?? undefined;
 };
 
 export const markdownSerializer = (doc: Node, specRegistry: SpecRegistry) => {
   doc = uncollapseHeadings(doc, specRegistry);
 
-  const text = getSerializer(specRegistry).serialize(doc);
+  const text = getSerializer(specRegistry)?.serialize(doc);
 
   return text;
 };
@@ -101,6 +106,7 @@ function uncollapseHeadings(doc: Node, specRegistry: SpecRegistry) {
   doc.forEach((node) => {
     if (!collapsedHeadingSet.has(node)) {
       frag = frag.append(Fragment.from(node));
+
       return;
     }
 

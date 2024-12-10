@@ -1,86 +1,110 @@
 import React from 'react';
 
-import type { SidebarType } from '@bangle.io/extension-registry';
-import type { SerialOperationKeybindingMapping } from '@bangle.io/shared-types';
-import { changeSidebar, useUIManagerContext } from '@bangle.io/slice-ui';
-import {
-  goToWorkspaceHomeRoute,
-  useWorkspaceContext,
-} from '@bangle.io/slice-workspace';
-import { GiftIcon, SingleCharIcon } from '@bangle.io/ui-components';
+import { useNsmSlice, useNsmSliceState } from '@bangle.io/bangle-store-context';
+import { CHANGELOG_MODAL_NAME } from '@bangle.io/constants';
+import { vars } from '@bangle.io/css-vars';
+import { useExtensionRegistryContext } from '@bangle.io/extension-registry';
+import { nsmSliceWorkspace } from '@bangle.io/nsm-slice-workspace';
+import { goToWorkspaceHome, nsmPageSlice } from '@bangle.io/slice-page';
+import { nsmUI, nsmUISlice } from '@bangle.io/slice-ui';
+import { Button, GiftIcon, SingleCharIcon } from '@bangle.io/ui-components';
+import { cx } from '@bangle.io/utils';
 
-import { ActivitybarButton } from './ActivitybarButton';
-import { ActivitybarMobile } from './ActivitybarMobile';
 import { ActivitybarOptionsDropdown } from './ActivitybarOptionsDropdown';
+import { ButtonStyleOBj } from './common';
 
-export function Activitybar({
-  wsName,
-  sidebars,
-  primaryWsPath,
-  operationKeybindings,
-}: {
-  wsName?: string;
-  primaryWsPath?: string;
-  sidebars: SidebarType[];
-  operationKeybindings: SerialOperationKeybindingMapping;
-}) {
-  const { changelogHasUpdates, sidebar, dispatch, widescreen } =
-    useUIManagerContext();
-  const { bangleStore } = useWorkspaceContext();
+export function Activitybar() {
+  const extensionRegistry = useExtensionRegistryContext();
+  const operationKeybindings =
+    extensionRegistry.getSerialOperationKeybindingMapping();
+  const { wsName } = useNsmSliceState(nsmSliceWorkspace);
+  const [, pageDispatch] = useNsmSlice(nsmPageSlice);
 
-  if (!widescreen) {
-    return <ActivitybarMobile wsName={wsName} primaryWsPath={primaryWsPath} />;
-  }
+  const sidebars = extensionRegistry.getSidebars();
 
-  const sidebarItems = sidebars.map((r) => {
-    const active = sidebar === r.name;
-    return (
-      <ActivitybarButton
-        isActive={active}
-        hint={r.hint}
-        icon={React.cloneElement(r.activitybarIcon, {
-          className: (r.activitybarIcon.props.className || '') + ' w-7 h-7',
-        })}
-        key={r.name}
-        widescreen={widescreen}
-        onPress={() => {
-          changeSidebar(r.name)(bangleStore.state, bangleStore.dispatch);
-        }}
-      />
-    );
-  });
+  const [{ changelogHasUpdates, sidebar, widescreen }, uiDispatch] =
+    useNsmSlice(nsmUISlice);
+
+  const sideBarComponents = sidebars
+    .filter((r) => {
+      return r.activitybarIconShow ? r.activitybarIconShow(wsName) : true;
+    })
+    .map((r) => {
+      const active = sidebar === r.name;
+
+      return (
+        <Button
+          ariaLabel={r.hint}
+          key={r.name}
+          onPress={() => {
+            uiDispatch(nsmUI.toggleSideBar(r.name));
+          }}
+          style={{
+            ...ButtonStyleOBj.normal,
+            borderColor: active
+              ? vars.color.promote.border
+              : vars.misc.activitybarBg,
+          }}
+          onPressStyle={ButtonStyleOBj.press}
+          onHoverStyle={ButtonStyleOBj.hover}
+          className={cx('border-l-2', active && 'BU_is-active')}
+          variant="transparent"
+          size="lg"
+          leftIcon={r.activitybarIcon}
+        />
+      );
+    });
 
   return (
-    <div className="flex flex-col flex-grow pt-2 pb-3 activitybar widescreen">
-      <ActivitybarButton
-        widescreen={widescreen}
-        isActive={false}
+    <div
+      data-testid="app-activitybar_activitybar"
+      style={{
+        backgroundColor: vars.misc.activitybarBg,
+        color: vars.misc.activitybarText,
+      }}
+      className="flex flex-col flex-grow gap-2 pt-2 pb-3 border-r-1 border-colorNeutralBorder"
+    >
+      <Button
+        ariaLabel="Workspace Home"
+        style={ButtonStyleOBj.normal}
+        onPressStyle={ButtonStyleOBj.press}
+        onHoverStyle={ButtonStyleOBj.hover}
         onPress={() => {
-          changeSidebar(null)(bangleStore.state, bangleStore.dispatch);
-          goToWorkspaceHomeRoute()(bangleStore.state, bangleStore.dispatch);
+          if (wsName) {
+            uiDispatch(nsmUI.closeSidebar());
+            pageDispatch(
+              goToWorkspaceHome({
+                wsName,
+              }),
+            );
+          }
         }}
-        hint="Workspace Home"
-        icon={
-          <SingleCharIcon
-            char={wsName?.[0]?.toLocaleUpperCase() || ' '}
-            className="w-8 h-8 text-gray-100"
-          />
+        variant="transparent"
+        tone="secondary"
+        size="lg"
+        leftIcon={
+          <SingleCharIcon char={wsName?.[0]?.toLocaleUpperCase() || 'H'} />
         }
       />
 
-      {sidebarItems}
+      {sideBarComponents}
       <div className="flex-grow"></div>
-      <ActivitybarButton
-        isActive={false}
-        widescreen={widescreen}
-        icon={<GiftIcon className="h-7 w-7" showDot={changelogHasUpdates} />}
-        hint={"What's new"}
+      <Button
+        ariaLabel="What's new"
+        style={ButtonStyleOBj.normal}
+        onPressStyle={ButtonStyleOBj.press}
+        onHoverStyle={ButtonStyleOBj.hover}
         onPress={() => {
-          dispatch({
-            name: 'action::@bangle.io/slice-ui:SHOW_MODAL',
-            value: { modal: '@modal/changelog' },
-          });
+          uiDispatch(
+            nsmUI.showDialog({
+              dialogName: CHANGELOG_MODAL_NAME,
+            }),
+          );
         }}
+        variant="transparent"
+        tone="secondary"
+        size="lg"
+        leftIcon={<GiftIcon showDot={changelogHasUpdates} />}
       />
       <ActivitybarOptionsDropdown
         operationKeybindings={operationKeybindings}

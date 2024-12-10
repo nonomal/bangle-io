@@ -1,47 +1,12 @@
 import type { Options } from 'debounce-fn';
 import debounceFn from 'debounce-fn';
-import {
-  DependencyList,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import type { DependencyList } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { rafSchedule } from './safe-js-callbacks';
 import { keybindingsHelper } from './utility';
 
 export * from './use-local-storage';
 export * from './use-recency-monitor';
-
-export function useWindowSize() {
-  const [windowSize, setWindowSize] = useState(() => ({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  }));
-
-  useEffect(() => {
-    // Handler to call on window resize
-    const handleResize = rafSchedule(() => {
-      // Set window width/height to state
-      setWindowSize({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    });
-
-    // Add event listener
-    window.addEventListener('resize', handleResize);
-
-    // Remove event listener on cleanup
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []); // Empty array ensures that effect is only run on mount
-
-  return windowSize;
-}
 
 /**
  * Example usage:
@@ -67,6 +32,7 @@ export function useKeybindings<T extends (...args: any[]) => any>(
   useEffect(() => {
     const keyHandler = keybindingsHelper(memoCb());
     document.addEventListener('keydown', keyHandler);
+
     return () => {
       document.removeEventListener('keydown', keyHandler);
     };
@@ -91,30 +57,19 @@ export function useWatchClickOutside(
 
       if (inside) {
         onClickInside?.();
+
         return;
       }
       onClickOutside?.();
+
       return;
     };
     document.addEventListener('click', handler);
+
     return () => {
       document.removeEventListener('click', handler);
     };
   }, [ref, onClickOutside, onClickInside]);
-}
-
-/**
- * Catches unhandled sync and async error
- */
-export function useCatchRejection(
-  callback: (event: PromiseRejectionEvent) => void,
-) {
-  useEffect(() => {
-    window.addEventListener('unhandledrejection', callback);
-    return () => {
-      window.removeEventListener('unhandledrejection', callback);
-    };
-  }, [callback]);
 }
 
 export function useDestroyRef() {
@@ -138,7 +93,7 @@ export function useBroadcastChannel<T>(
   channelName: string,
 ): [T | undefined, (data: T) => void] {
   const infiniteRecurseRef = useRef(0);
-  const lastSentRef = useRef<Number | undefined>();
+  const lastSentRef = useRef<number | undefined>();
   const destroyedRef = useRef(false);
   const [lastMessage, updateEvent] = useState<T | undefined>();
   const [bChannel] = useState(() => {
@@ -148,6 +103,7 @@ export function useBroadcastChannel<T>(
     if (typeof window !== 'undefined' && window.BroadcastChannel) {
       return new BroadcastChannel(channelName);
     }
+
     return undefined;
   });
 
@@ -170,6 +126,7 @@ export function useBroadcastChannel<T>(
     (data: T) => {
       if (!destroyedRef.current) {
         const lastSent = lastSentRef.current;
+
         if (
           lastSent &&
           Date.now() - (lastSent as number) < INFINITE_RECURSION_TIME_THRESHOLD
@@ -232,37 +189,24 @@ export function usePrevious<T>(value: T | undefined): T | undefined {
   useEffect(() => {
     ref.current = value;
   }, [value]); // Only re-run if value changes
+
   // Return previous value (happens before update in useEffect above)
   return ref.current;
 }
 
-// helper hook that returns a callback that
-// will automatically open the note in the right place
-export function useClickToNote<T>(
-  pushWsPath: (wsPath: any, newTab?: any, secondary?: any) => void,
+export function useInterval<T extends (...args: any[]) => any>(
+  callback: T,
+  deps: DependencyList,
+  interval: number,
 ) {
-  const makeOnClick = useCallback(
-    (wsPath?: string) => {
-      return (event: React.MouseEvent<T, MouseEvent>) => {
-        if (!wsPath) {
-          return;
-        }
-        let newTab = false;
-        let shift = false;
-        if (
-          event.ctrlKey ||
-          event.metaKey || // apple
-          (event.button && event.button === 1) // middle click, >IE9 + everyone else
-        ) {
-          newTab = true;
-        } else if (event.shiftKey) {
-          shift = true;
-        }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const memoCb = useCallback(callback, deps);
 
-        pushWsPath(wsPath, newTab, shift);
-      };
-    },
-    [pushWsPath],
-  );
-  return makeOnClick;
+  useEffect(() => {
+    let id = setInterval(memoCb, interval);
+
+    return () => {
+      clearInterval(id);
+    };
+  }, [memoCb, interval]);
 }

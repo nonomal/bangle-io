@@ -3,20 +3,20 @@
 exports[`renders correctly workspace is opened 1`] = `
 <div>
   <div
-    class="flex flex-col h-full search-notes"
+    class="flex flex-col h-full B-search-notes_search-notes"
     style="overflow-y: auto;"
   >
     <div
-      class="b-item-container px-2 mt-2"
+      class="px-2 mt-2 "
     >
       <div
-        class="bangle-input-container"
+        class="B-ui-components_input-container"
       >
         <input
           aria-label="Search"
           autocapitalize="off"
           autocorrect="off"
-          class="bangle-input "
+          class="outline-offset-1 text-field-neutral border-1 border-colorNeutralTextFieldBorder rounded px-2 py-1 w-full  B-ui-components_misc-input-ring "
           placeholder="Search"
           type="text"
           value=""
@@ -27,7 +27,7 @@ exports[`renders correctly workspace is opened 1`] = `
       </div>
     </div>
     <div
-      class="b-item-container flex flex-row justify-between px-2 my-1 text-xs"
+      class="flex flex-row justify-between px-2 my-1 text-xs "
     />
     <div
       class="flex-grow"
@@ -40,20 +40,20 @@ exports[`renders correctly workspace is opened 1`] = `
 exports[`show search results 1`] = `
 <div>
   <div
-    class="flex flex-col h-full search-notes"
+    class="flex flex-col h-full B-search-notes_search-notes"
     style="overflow-y: auto;"
   >
     <div
-      class="b-item-container px-2 mt-2"
+      class="px-2 mt-2 "
     >
       <div
-        class="bangle-input-container"
+        class="B-ui-components_input-container"
       >
         <input
           aria-label="Search"
           autocapitalize="off"
           autocorrect="off"
-          class="bangle-input "
+          class="outline-offset-1 text-field-neutral border-1 border-colorNeutralTextFieldBorder rounded px-2 py-1 w-full  B-ui-components_misc-input-ring "
           placeholder="Search"
           type="text"
           value=""
@@ -64,7 +64,7 @@ exports[`show search results 1`] = `
       </div>
     </div>
     <div
-      class="b-item-container flex flex-row justify-between px-2 my-1 text-xs"
+      class="flex flex-row justify-between px-2 my-1 text-xs "
     >
       <span
         class=""
@@ -72,7 +72,7 @@ exports[`show search results 1`] = `
         Found 1 notes
       </span>
       <button
-        class="focus:outline-none"
+        class="focus:outline-none "
         data-bangle-editor-break="true"
         data-bangle-editor-pos="bottom"
         type="button"
@@ -85,7 +85,7 @@ exports[`show search results 1`] = `
       style="overflow-y: auto;"
     >
       <div
-        class="b-sidebar-row2 hover search-result-note-match pl-1 pr-3  select-none"
+        class="B-ui-components_sidebar-row2 BU_hover B-search-notes_search-result-note-match pl-1 pr-3  select-none BU_active  "
         data-id="search-notes-result-0"
         role="button"
         style="cursor: pointer; display: flex; justify-content: space-between; user-select: none;"
@@ -94,16 +94,17 @@ exports[`show search results 1`] = `
           class="flex flex-row"
         >
           <div
-            class="b-left-node"
+            class="B-ui-components_left-node"
           >
             <button
-              class="focus:outline-none"
+              class="focus:outline-none "
               data-bangle-editor-break="true"
               data-bangle-editor-pos="bottom"
               type="button"
             >
               <svg
-                class="fill-current  "
+                class=" "
+                fill="currentColor"
                 style="height: 16px; width: 16px;"
                 viewBox="0 0 24 24"
                 xmlns="http://www.w3.org/2000/svg"
@@ -115,10 +116,10 @@ exports[`show search results 1`] = `
             </button>
           </div>
           <span
-            class="flex flex-col"
+            class="flex flex-col "
           >
             <span
-              class="b-title text-sm font-bold"
+              class="text-sm font-bold"
             >
               one
             </span>
@@ -129,10 +130,10 @@ exports[`show search results 1`] = `
           class="flex flex-row"
         >
           <span
-            class="b-right-node"
+            class="B-ui-components_right-node"
           >
             <button
-              class="focus:outline-none text-xs font-semibold"
+              class="focus:outline-none text-xs font-semibold "
               data-bangle-editor-break="true"
               data-bangle-editor-pos="bottom"
               type="button"
@@ -141,10 +142,10 @@ exports[`show search results 1`] = `
             </button>
           </span>
           <span
-            class="b-right-hover-node"
+            class="B-ui-components_right-hover-node"
           >
             <button
-              class="focus:outline-none text-xs font-semibold"
+              class="focus:outline-none text-xs font-semibold "
               data-bangle-editor-break="true"
               data-bangle-editor-pos="bottom"
               type="button"
@@ -154,9 +155,11 @@ exports[`show search results 1`] = `
           </span>
         </div>
       </div>
-      <span>
+      <a
+        class="rounded-sm block B-search-notes_search-result-text-match  mt-3 pb-4 border-b-1 border-colorNeutralBorder "
+      >
         <div
-          class="b-sidebar-row2 hover pl-3"
+          class="B-ui-components_sidebar-row2 BU_hover pl-3 "
           data-id="search-result-text-match-0"
           role="button"
           style="cursor: pointer; display: flex; justify-content: space-between; user-select: none;"
@@ -165,24 +168,24 @@ exports[`show search results 1`] = `
             class="flex flex-row"
           >
             <div
-              class="b-left-node"
+              class="B-ui-components_left-node"
             />
             <span
               class=""
             >
               <span
-                class="b-title text-sm "
+                class="text-sm "
               >
                 <div
-                  class="highlight-text-container"
+                  class="B-search-notes_highlight-text-container"
                 >
                   <span
-                    class="highlight-text text-sm"
+                    class="B-search-notes_highlight-text text-sm"
                   >
                     hello
                   </span>
                   <span
-                    class="highlight-text text-sm"
+                    class="B-search-notes_highlight-text text-sm"
                   >
                      world
                   </span>
@@ -194,14 +197,14 @@ exports[`show search results 1`] = `
             class="flex flex-row"
           >
             <span
-              class="b-right-node"
+              class="B-ui-components_right-node"
             />
             <span
-              class="b-right-hover-node"
+              class="B-ui-components_right-hover-node"
             />
           </div>
         </div>
-      </span>
+      </a>
     </div>
   </div>
 </div>

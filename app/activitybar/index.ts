@@ -1,1 +1,2 @@
-export * from './Activitybar';
+export { Activitybar } from './Activitybar';
+export { ActivitybarMobile } from './ActivitybarMobile';

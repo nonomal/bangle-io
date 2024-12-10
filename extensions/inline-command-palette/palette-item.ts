@@ -1,4 +1,4 @@
-import { Command } from '@bangle.dev/pm';
+import type { Command } from '@bangle.dev/pm';
 
 export const PALETTE_ITEM_REGULAR_TYPE = 'REGULAR_TYPE';
 export const PALETTE_ITEM_HINT_TYPE = 'HINT_TYPE';
@@ -8,6 +8,7 @@ export class PaletteItem {
   static create(obj: any) {
     return new PaletteItem(obj);
   }
+
   uid: string;
   title: string;
   type: string;

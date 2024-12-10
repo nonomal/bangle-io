@@ -1,81 +1,114 @@
 import React, { useEffect, useState } from 'react';
 
 import { requestNativeBrowserFSPermission } from '@bangle.io/baby-fs';
-import { useBangleStoreContext } from '@bangle.io/bangle-store-context';
-import { WorkspaceTypeNative } from '@bangle.io/constants';
-import type { WorkspaceInfo } from '@bangle.io/shared-types';
-import { useUIManagerContext } from '@bangle.io/slice-ui';
 import {
-  getWorkspaceInfoAsync,
-  goToWorkspaceHomeRoute,
-  goToWsNameRoute,
-} from '@bangle.io/slice-workspace';
-import { ActionButton, ButtonContent } from '@bangle.io/ui-bangle-button';
-import { CenteredBoxedPage } from '@bangle.io/ui-components';
+  useNsmSliceDispatch,
+  useNsmSliceState,
+} from '@bangle.io/bangle-store-context';
+import { SEVERITY, WorkspaceType } from '@bangle.io/constants';
+import type { WorkspaceInfo } from '@bangle.io/shared-types';
+import { nsmNotification } from '@bangle.io/slice-notification';
+import {
+  goToLandingPage,
+  goToWorkspaceHome,
+  goToWsNameRouteNotFoundRoute,
+  nsmPageSlice,
+} from '@bangle.io/slice-page';
+import { nsmUISlice } from '@bangle.io/slice-ui';
+import { Button, CenteredBoxedPage } from '@bangle.io/ui-components';
 import { keybindingsHelper } from '@bangle.io/utils';
+import { readWorkspaceInfo } from '@bangle.io/workspace-info';
+import { createWsName } from '@bangle.io/ws-path';
 
-export function WorkspaceNativefsAuthBlockade({ wsName }: { wsName: string }) {
-  wsName = decodeURIComponent(wsName || '');
-
+export function WorkspaceNativefsAuthBlockade({
+  wsName: _wsName,
+}: {
+  wsName: string;
+}) {
+  const wsName = createWsName(decodeURIComponent(_wsName || ''));
   const [permissionDenied, updatePermissionDenied] = useState(false);
-  const bangleStore = useBangleStoreContext();
+  const pageDispatch = useNsmSliceDispatch(nsmPageSlice);
+  const notificationDispatch = useNsmSliceDispatch(
+    nsmNotification.nsmNotificationSlice,
+  );
+
   const [wsInfo, updateWsInfo] = useState<WorkspaceInfo>();
 
   useEffect(() => {
     let destroyed = false;
 
-    getWorkspaceInfoAsync(wsName)(bangleStore.state).then(
+    readWorkspaceInfo(wsName).then(
       (wsInfo) => {
         if (destroyed) {
           return;
         }
-        updateWsInfo(wsInfo);
+        if (!wsInfo) {
+          pageDispatch(goToWsNameRouteNotFoundRoute({ wsName }));
+        } else {
+          updateWsInfo(wsInfo);
+        }
       },
       (error) => {
         if (destroyed) {
           return;
         }
-        bangleStore.errorHandler(error);
+
+        notificationDispatch(
+          nsmNotification.showNotification({
+            content: `Error reading workspace info for ${wsName}. ${error.message}`,
+            title: 'Error',
+            severity: SEVERITY.ERROR,
+            uid: 'workspace-info-read-error' + Date.now(),
+          }),
+        );
+
+        // TODO should we try send to storage error handling?
+        // the problem is that it could cause infinite loop
+        console.error(error);
+
+        return;
       },
     );
 
     return () => {
       destroyed = true;
     };
-  }, [wsName, bangleStore]);
+  }, [wsName, pageDispatch, notificationDispatch]);
 
   const onGranted = () => {
-    goToWsNameRoute(wsName, { replace: true })(
-      bangleStore.state,
-      bangleStore.dispatch,
-    );
+    pageDispatch(goToWorkspaceHome({ wsName, replace: true }));
   };
 
   const requestFSPermission = async () => {
     if (!wsInfo) {
       throw new Error('workspace not found');
     }
-    if (wsInfo.type !== WorkspaceTypeNative) {
+    if (wsInfo.type !== WorkspaceType.NativeFS) {
       onGranted();
+
       return true;
     }
+
     const result = await requestNativeBrowserFSPermission(
       wsInfo.metadata.rootDirHandle,
     );
+
     if (result) {
       onGranted();
+
       return true;
     } else {
       updatePermissionDenied(true);
+
       return false;
     }
   };
 
   useEffect(() => {
     if (!wsName) {
-      goToWorkspaceHomeRoute()(bangleStore.state, bangleStore.dispatch);
+      pageDispatch(goToLandingPage());
     }
-  }, [bangleStore, wsName]);
+  }, [pageDispatch, wsName]);
 
   if (!wsName || !wsInfo) {
     return null;
@@ -99,23 +132,26 @@ function PermissionModal({
   requestFSPermission: () => Promise<boolean>;
   wsName: string;
 }) {
-  const { paletteType, modal } = useUIManagerContext();
+  const { dialogName, paletteType } = useNsmSliceState(nsmUISlice);
+
   const isPaletteActive = Boolean(paletteType);
   useEffect(() => {
     let callback = keybindingsHelper({
       Enter: () => {
-        if (isPaletteActive || modal) {
+        if (isPaletteActive || dialogName) {
           return false;
         }
         requestFSPermission();
+
         return true;
       },
     });
     document.addEventListener('keydown', callback);
+
     return () => {
       document.removeEventListener('keydown', callback);
     };
-  }, [requestFSPermission, isPaletteActive, modal]);
+  }, [requestFSPermission, isPaletteActive, dialogName]);
 
   return (
     <CenteredBoxedPage
@@ -131,20 +167,14 @@ function PermissionModal({
         </span>
       }
       actions={
-        <ActionButton
+        <Button
+          tone="promote"
           ariaLabel="grant disk read permission"
           onPress={() => {
             requestFSPermission();
           }}
-        >
-          <ButtonContent
-            text={
-              <>
-                <span>Grant permission {'[Enter]'}</span>
-              </>
-            }
-          />
-        </ActionButton>
+          text="Grant permission [Enter]"
+        />
       }
     >
       <span>

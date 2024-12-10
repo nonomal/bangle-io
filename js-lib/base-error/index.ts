@@ -1,6 +1,22 @@
 export class BaseError extends Error {
-  public code?: string;
-  public thrower?: string;
+  static fromJsonValue(input: ReturnType<BaseError['toJsonValue']>) {
+    const error = new BaseError({
+      message: input.message,
+      code: input.code || undefined,
+      thrower: input.thrower || undefined,
+    });
+
+    error.name = input.name;
+
+    if (input.stack) {
+      error.stack = input.stack;
+    }
+
+    return error;
+  }
+
+  code?: string;
+  thrower?: string;
   /**
    *
    * @param {*} message
@@ -26,6 +42,7 @@ export class BaseError extends Error {
       (Error as any).captureStackTrace(this, BaseError);
     } else {
       const stack = new Error().stack;
+
       if (stack) {
         this.stack = stack;
       }
@@ -33,6 +50,7 @@ export class BaseError extends Error {
 
     // restore prototype chain
     const actualProto = new.target.prototype;
+
     if (Object.setPrototypeOf) {
       Object.setPrototypeOf(this, actualProto);
     } else {
@@ -40,6 +58,7 @@ export class BaseError extends Error {
     }
 
     this.name = this.constructor.name;
+
     if (code) {
       this.code = code;
     }
@@ -58,21 +77,5 @@ export class BaseError extends Error {
       code: this.code || null,
       stack: this.stack,
     };
-  }
-
-  static fromJsonValue(input: ReturnType<BaseError['toJsonValue']>) {
-    const error = new BaseError({
-      message: input.message,
-      code: input.code || undefined,
-      thrower: input.thrower || undefined,
-    });
-
-    error.name = input.name;
-
-    if (input.stack) {
-      error.stack = input.stack;
-    }
-
-    return error;
   }
 }

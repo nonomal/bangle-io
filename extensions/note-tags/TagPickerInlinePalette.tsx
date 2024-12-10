@@ -9,21 +9,26 @@ import {
   useInlinePaletteQuery,
 } from '@bangle.io/inline-palette';
 import { InlinePaletteRow, UniversalPalette } from '@bangle.io/ui-components';
+import { assertNotUndefined } from '@bangle.io/utils';
 
 import { palettePluginKey, tagNodeName } from './config';
 import { useSearchAllTags } from './search';
 
 export const createTagNode = (tagValue: string): Command => {
   tagValue = tagValue.trim();
+
   return (
     state: EditorState,
     dispatch: EditorView['dispatch'] | undefined,
     view: EditorView | undefined,
   ) => {
     const nodeType = state.schema.nodes[tagNodeName];
+
     if (tagValue === '') {
       return false;
     }
+
+    assertNotUndefined(nodeType, 'tag nodeType must be defined');
 
     return replaceSuggestionMarkWith(
       palettePluginKey,
@@ -64,8 +69,10 @@ export function TagPickerInlinePalette() {
       if (!filteredTags.includes(query)) {
         return [newTag, ...result];
       }
+
       return result;
     }
+
     return [];
   }, [query, filteredTags]);
 
@@ -77,8 +84,8 @@ export function TagPickerInlinePalette() {
   );
 
   return ReactDOM.createPortal(
-    <div className="shadow-2xl inline-palette-wrapper">
-      <div className="inline-palette-items-wrapper tag-picker-inline-palette">
+    <div className="shadow-2xl B-ui-components_inline-palette-wrapper flex flex-col bg-colorNeutralBgLayerFloat">
+      <div className="B-ui-components_inline-palette-items-wrapper tag-picker-inline-palette">
         {query ? (
           items.map((r, i) => {
             return (

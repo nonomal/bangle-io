@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "importHelpers": true,
-    "allowJs": false,
-    "checkJs": false,
+    "allowJs": true,
+    "checkJs": true,
     "composite": true,
     "esModuleInterop": true,
     "declaration": true,
@@ -27,7 +27,7 @@
     "skipLibCheck": true,
     "strict": true,
     "stripInternal": true,
-    "target": "es2020",
+    "target": "es2021",
     "useDefineForClassFields": true
   },
   "include": [
@@ -35,12 +35,18 @@
     "**/*.tsx",
   ],
   "exclude": [
-    ".yarn/__virtual__"
+    ".yarn/__virtual__",
+    "**/__tests__/*",
+    "**/test-utils/*",
   ],
   "typeAcquisition": {
-    "include": [
-      "jest",
-      "wicg-file-system-access"
-    ]
+    "include": []
+  },
+  "ts-node": {
+    "transpileOnly": true,
+    "files": true,
+    "compilerOptions": {
+      "module": "CommonJS"
+    }
   },
 }

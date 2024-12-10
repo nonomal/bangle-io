@@ -1,5 +1,5 @@
 /**
- * @jest-environment jsdom
+ * @jest-environment @bangle.io/jsdom-env
  */
 import { act, fireEvent, render } from '@testing-library/react';
 import React from 'react';
@@ -18,6 +18,7 @@ test('handles error', () => {
   let result = render(
     <div>
       <WorkspaceSidebar
+        widescreen
         onDismiss={jest.fn()}
         sidebar={{
           name: 'sidebar::test-sidebar',
@@ -25,11 +26,12 @@ test('handles error', () => {
           activitybarIcon: <span>test-icon</span>,
           ReactComponent: () => {
             throw new Error('Blah blah');
+
             return <span>something</span>;
           },
           hint: 'test-hint',
         }}
-      ></WorkspaceSidebar>
+      />
     </div>,
   );
   expect(result.container.innerHTML).toContain('Blah blah');
@@ -39,6 +41,7 @@ test('renders', () => {
   let result = render(
     <div>
       <WorkspaceSidebar
+        widescreen
         onDismiss={jest.fn()}
         sidebar={{
           name: 'sidebar::test-sidebar',
@@ -49,7 +52,7 @@ test('renders', () => {
           },
           hint: 'test-hint',
         }}
-      ></WorkspaceSidebar>
+      />
     </div>,
   );
 
@@ -62,6 +65,7 @@ test('calls the dismiss button', () => {
   let result = render(
     <div>
       <WorkspaceSidebar
+        widescreen
         onDismiss={onDismiss}
         sidebar={{
           name: 'sidebar::test-sidebar',
@@ -72,12 +76,12 @@ test('calls the dismiss button', () => {
           },
           hint: 'test-hint',
         }}
-      ></WorkspaceSidebar>
+      />
     </div>,
   );
 
   act(() => {
-    fireEvent.click(result.getByLabelText('hide search notes'));
+    fireEvent.click(result.getByLabelText('Hide search notes'));
   });
 
   expect(onDismiss).toBeCalledTimes(1);

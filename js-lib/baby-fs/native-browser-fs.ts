@@ -1,3 +1,5 @@
+import { isAbortError } from '@bangle.io/is-abort-error';
+
 import {
   BaseFileMetadata,
   BaseFileSystem,
@@ -16,8 +18,8 @@ import {
   hasPermission,
   readFileAsText as readFileAsTextHelper,
   recurseDirHandle,
-  writeFile,
 } from './native-browser-fs-helpers';
+import { writeToFile } from './universal-write-to-file';
 
 const dirToChildMap = new WeakMap<
   FileSystemDirectoryHandle,
@@ -38,6 +40,7 @@ function catchUpstreamError<T>(promise: Promise<T>, errorMessage: string) {
           code: FILE_NOT_FOUND_ERROR,
         });
       }
+
       return Promise.reject(
         new NativeBrowserFileSystemError({
           message: errorMessage,
@@ -49,28 +52,35 @@ function catchUpstreamError<T>(promise: Promise<T>, errorMessage: string) {
 }
 
 export class NativeBrowserFileSystem extends BaseFileSystem {
-  private _allowedFile: (f: FileSystemFileHandle) => boolean;
   private _allowedDir: (entry: FileSystemDirectoryHandle) => boolean;
+  private _allowedFile: (f: FileSystemFileHandle) => boolean;
+
   private _resolveFileHandle: ReturnType<typeof resolveFileHandle>;
   private _rootDirHandle: FileSystemDirectoryHandle;
 
   constructor(opts: {
     rootDirHandle: FileSystemDirectoryHandle;
-    allowedFile?: (f: FileSystemFileHandle) => boolean;
-    allowedDir?: (entry: FileSystemDirectoryHandle) => boolean;
+    allowedFile?: (f: { name: string }) => boolean;
+    allowedDir?: (entry: { name: string }) => boolean;
   }) {
-    super();
+    super({
+      allowedFile: opts.allowedFile,
+      allowedDir: opts.allowedDir,
+    });
 
     const {
       rootDirHandle,
       allowedFile = () => true,
+      // TODO move this out and standardize the ignore across all bangle
       allowedDir = (entry) => !DEFAULT_DIR_IGNORE_LIST.includes(entry.name),
     } = opts;
 
     this._rootDirHandle = rootDirHandle;
+
     if (!this._rootDirHandle) {
       throw new Error('rootDirHandle must be provided');
     }
+
     this._allowedFile = allowedFile;
     this._allowedDir = allowedDir;
     this._resolveFileHandle = resolveFileHandle({ allowedDir, allowedFile });
@@ -93,24 +103,27 @@ export class NativeBrowserFileSystem extends BaseFileSystem {
       catchUpstreamError(opendirRecursive(...args), 'Unable to open dir');
   }
 
-  async stat(filePath: string) {
-    await verifyPermission(this._rootDirHandle, filePath);
-    const { fileHandle } = await this._resolveFileHandle(
-      this._rootDirHandle,
-      filePath,
-    );
+  async opendirRecursive(dirPath: string) {
+    if (!dirPath) {
+      throw new Error('dirPath must be defined');
+    }
 
-    const file = await fileHandle.getFile();
+    await verifyPermission(this._rootDirHandle);
 
-    return new BaseFileMetadata({ mtimeMs: file.lastModified });
-  }
+    const data = await recurseDirHandle(this._rootDirHandle, {
+      allowedFile: this._allowedFile,
+      allowedDir: this._allowedDir,
+    });
 
-  async readFileAsText(filePath: string): Promise<string> {
-    this._verifyFilePath(filePath);
+    if (!dirPath.endsWith('/')) {
+      dirPath += '/';
+    }
 
-    const file = await this.readFile(filePath);
-    const textContent = await readFileAsTextHelper(file);
-    return textContent;
+    let files = data.map((r) => r.map((f) => f.name).join('/'));
+
+    files = dirPath ? files.filter((k) => k.startsWith(dirPath)) : files;
+
+    return files;
   }
 
   async readFile(filePath: string): Promise<File> {
@@ -125,57 +138,13 @@ export class NativeBrowserFileSystem extends BaseFileSystem {
     return fileHandle.getFile();
   }
 
-  async writeFile(filePath: string, data: File) {
-    this._verifyFilePath(filePath);
-    this._verifyFileType(data);
-    await verifyPermission(this._rootDirHandle, filePath);
-
-    let fileHandle: FileSystemFileHandle | undefined;
-    let shouldCreateFile = false;
-
-    try {
-      ({ fileHandle } = await this._resolveFileHandle(
-        this._rootDirHandle,
-        filePath,
-      ));
-    } catch (error) {
-      if (
-        error instanceof NativeBrowserFileSystemError &&
-        error.code === FILE_NOT_FOUND_ERROR
-      ) {
-        shouldCreateFile = true;
-      } else {
-        throw error;
-      }
-    }
-
-    if (shouldCreateFile) {
-      await createFile(this._rootDirHandle, filePath);
-      ({ fileHandle } = await this._resolveFileHandle(
-        this._rootDirHandle,
-        filePath,
-      ));
-    }
-
-    if (!fileHandle) {
-      throw new Error('fileHandle must be defined');
-    }
-
-    await writeFile(fileHandle, data);
-  }
-
-  async unlink(filePath: string) {
+  async readFileAsText(filePath: string): Promise<string> {
     this._verifyFilePath(filePath);
 
-    await verifyPermission(this._rootDirHandle, filePath);
+    const file = await this.readFile(filePath);
+    const textContent = await readFileAsTextHelper(file);
 
-    const { fileHandle, parentHandles } = await this._resolveFileHandle(
-      this._rootDirHandle,
-      filePath,
-    );
-
-    const parentHandle = parentHandles[parentHandles.length - 1];
-    await parentHandle?.removeEntry(fileHandle.name);
+    return textContent;
   }
 
   async rename(oldFilePath: string, newFilePath: string) {
@@ -207,27 +176,69 @@ export class NativeBrowserFileSystem extends BaseFileSystem {
     await this.unlink(oldFilePath);
   }
 
-  async opendirRecursive(dirPath: string) {
-    if (!dirPath) {
-      throw new Error('dirPath must be defined');
+  async stat(filePath: string) {
+    await verifyPermission(this._rootDirHandle, filePath);
+    const { fileHandle } = await this._resolveFileHandle(
+      this._rootDirHandle,
+      filePath,
+    );
+
+    const file = await fileHandle.getFile();
+
+    return new BaseFileMetadata({ mtimeMs: file.lastModified });
+  }
+
+  async unlink(filePath: string) {
+    this._verifyFilePath(filePath);
+
+    await verifyPermission(this._rootDirHandle, filePath);
+
+    const { fileHandle, parentHandles } = await this._resolveFileHandle(
+      this._rootDirHandle,
+      filePath,
+    );
+
+    const parentHandle = parentHandles[parentHandles.length - 1];
+    await parentHandle?.removeEntry(fileHandle.name);
+  }
+
+  async writeFile(filePath: string, data: File) {
+    this._verifyFilePath(filePath);
+    this._verifyFileType(data);
+    await verifyPermission(this._rootDirHandle, filePath);
+
+    let fileHandle: FileSystemFileHandle | undefined;
+    let shouldCreateFile = false;
+    let parentHandles: FileSystemDirectoryHandle[] = [];
+    try {
+      ({ fileHandle, parentHandles } = await this._resolveFileHandle(
+        this._rootDirHandle,
+        filePath,
+      ));
+    } catch (error) {
+      if (
+        error instanceof NativeBrowserFileSystemError &&
+        error.code === FILE_NOT_FOUND_ERROR
+      ) {
+        shouldCreateFile = true;
+      } else {
+        throw error;
+      }
     }
 
-    await verifyPermission(this._rootDirHandle);
-
-    const data = await recurseDirHandle(this._rootDirHandle, {
-      allowedFile: this._allowedFile,
-      allowedDir: this._allowedDir,
-    });
-
-    if (!dirPath.endsWith('/')) {
-      dirPath += '/';
+    if (shouldCreateFile) {
+      await createFile(this._rootDirHandle, filePath);
+      ({ fileHandle, parentHandles } = await this._resolveFileHandle(
+        this._rootDirHandle,
+        filePath,
+      ));
     }
 
-    let files = data.map((r) => r.map((f) => f.name).join('/'));
+    if (!fileHandle) {
+      throw new Error('fileHandle must be defined');
+    }
 
-    files = dirPath ? files.filter((k) => k.startsWith(dirPath)) : files;
-
-    return files;
+    await writeToFile(fileHandle, data, parentHandles);
   }
 }
 
@@ -238,6 +249,7 @@ async function verifyPermission(
   filePath = '',
 ) {
   let permission = await hasPermission(rootDirHandle);
+
   if (!permission) {
     throw new NativeBrowserFileSystemError({
       message: `Permission rejected to read ${rootDirHandle.name}`,
@@ -274,10 +286,12 @@ function resolveFileHandle({
 
     const findChild = () => {
       const children = dirToChildMap.get(dirHandle);
+
       if (!children) {
         return undefined;
       }
       const match = children.find((entry) => entry.name === childName);
+
       return match;
     };
 
@@ -309,6 +323,7 @@ function resolveFileHandle({
     parents.push(dirHandle);
 
     const [parentName, ...rest] = path;
+
     if (!parentName) {
       throw new Error('Parent name must be defined');
     }
@@ -382,6 +397,7 @@ async function asyncIteratorToArray<T>(iter: AsyncIterable<T>): Promise<T[]> {
   for await (const i of iter) {
     arr.push(i);
   }
+
   return arr;
 }
 
@@ -391,21 +407,24 @@ export async function pickADirectory() {
       window as any
     ).showDirectoryPicker();
     let permission = await requestNativeBrowserFSPermission(dirHandle);
+
     if (!permission) {
       throw new NativeBrowserFileSystemError({
         message: 'The permission to edit directory was denied',
         code: NATIVE_BROWSER_PERMISSION_ERROR,
       });
     }
+
     return dirHandle;
   } catch (err) {
     if (err instanceof Error) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      if (isAbortError(err)) {
         throw new NativeBrowserFileSystemError({
           message: 'The user aborted.',
           code: NATIVE_BROWSER_USER_ABORTED_ERROR,
         });
       }
+
       throw new Error(err.message);
     }
     throw err;

@@ -1,63 +1,76 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 
-import { Activitybar } from '@bangle.io/activitybar';
+import { Activitybar, ActivitybarMobile } from '@bangle.io/activitybar';
+import { useNsmSlice, useNsmSliceState } from '@bangle.io/api';
+import { HELP_FS_WORKSPACE_NAME } from '@bangle.io/constants';
 import { useExtensionRegistryContext } from '@bangle.io/extension-registry';
 import { NoteSidebar, NoteSidebarShowButton } from '@bangle.io/note-sidebar';
-import { useUIManagerContext } from '@bangle.io/slice-ui';
-import { useWorkspaceContext } from '@bangle.io/slice-workspace';
+import { nsmSliceWorkspace } from '@bangle.io/nsm-slice-workspace';
+import { nsmUI, nsmUISlice } from '@bangle.io/slice-ui';
 import { Dhancha } from '@bangle.io/ui-dhancha';
 import { WorkspaceSidebar } from '@bangle.io/workspace-sidebar';
 
-import { ChangelogModal } from './changelog/ChangelogModal';
+import { DialogArea } from './components/DialogArea';
 import { NotificationArea } from './components/NotificationArea';
 import { ApplicationComponents } from './extension-glue/ApplicationComponents';
+import { usePMDevTools } from './hooks/use-pm-dev-tools';
+import { useRecentlyUsedWsPaths } from './hooks/use-recently-used-ws-paths';
 import { useSetDocumentTitle } from './misc/use-set-document-title';
-import { NewWorkspaceModal } from './new-workspace-modal/NewWorkspaceModal';
 import { Routes } from './Routes';
 
+let requestedStorage = false;
+
 export function AppContainer() {
-  const { widescreen } = useUIManagerContext();
-  const { wsName, openedWsPaths } = useWorkspaceContext();
+  const { wsName } = useNsmSliceState(nsmSliceWorkspace);
+  const [{ widescreen, sidebar, noteSidebar }, uiDispatch] =
+    useNsmSlice(nsmUISlice);
+
   const extensionRegistry = useExtensionRegistryContext();
+
   useSetDocumentTitle();
 
-  const sidebars = extensionRegistry.getSidebars();
   const noteSidebarWidgets = extensionRegistry.getNoteSidebarWidgets();
-  const operationKeybindings =
-    extensionRegistry.getSerialOperationKeybindingMapping();
 
-  const { sidebar, dispatch, noteSidebar } = useUIManagerContext();
   const currentSidebar = sidebar
-    ? sidebars.find((s) => s.name === sidebar)
+    ? extensionRegistry.getSidebars().find((s) => s.name === sidebar)
     : null;
 
   const onDismissSidebar = useCallback(() => {
-    dispatch({
-      name: 'action::@bangle.io/slice-ui:CHANGE_SIDEBAR',
-      value: {
-        type: null,
-      },
-    });
-  }, [dispatch]);
+    uiDispatch(nsmUI.closeSidebar());
+  }, [uiDispatch]);
 
   const onDismissNoteSidebar = useCallback(() => {
-    dispatch({
-      name: 'action::@bangle.io/slice-ui:UPDATE_NOTE_SIDEBAR',
-      value: { visible: false },
-    });
-  }, [dispatch]);
+    uiDispatch(nsmUI.updateNoteSidebar(false));
+  }, [uiDispatch]);
 
   const showNoteSidebar = useCallback(() => {
-    dispatch({
-      name: 'action::@bangle.io/slice-ui:UPDATE_NOTE_SIDEBAR',
-      value: { visible: true },
-    });
-  }, [dispatch]);
+    uiDispatch(nsmUI.updateNoteSidebar(true));
+  }, [uiDispatch]);
+
+  useEffect(() => {
+    // do not ask for persistence if user never interacted with app
+    // if a custom wsName is open, that means they interacted
+    if (wsName && wsName !== HELP_FS_WORKSPACE_NAME && !requestedStorage) {
+      let storagePersist = async () => {
+        if (typeof navigator === 'undefined') {
+          return;
+        }
+        requestedStorage = true;
+        let result = await navigator?.storage?.persist?.();
+        console.debug(`storage.persist: ${result}`);
+      };
+
+      storagePersist();
+    }
+  }, [wsName]);
+
+  useRecentlyUsedWsPaths();
+
+  usePMDevTools();
 
   return (
     <>
-      <ChangelogModal />
-      <NewWorkspaceModal />
+      <DialogArea />
       <ApplicationComponents />
       <NoteSidebarShowButton
         isNoteSidebarShown={Boolean(noteSidebar)}
@@ -66,14 +79,7 @@ export function AppContainer() {
       />
       <Dhancha
         widescreen={widescreen}
-        activitybar={
-          <Activitybar
-            operationKeybindings={operationKeybindings}
-            wsName={wsName}
-            primaryWsPath={openedWsPaths.primaryWsPath}
-            sidebars={sidebars}
-          />
-        }
+        activitybar={widescreen ? <Activitybar /> : <ActivitybarMobile />}
         noteSidebar={
           noteSidebar && (
             <NoteSidebar
@@ -87,6 +93,7 @@ export function AppContainer() {
             <WorkspaceSidebar
               onDismiss={onDismissSidebar}
               sidebar={currentSidebar}
+              widescreen={widescreen}
             />
           )
         }

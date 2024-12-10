@@ -1,28 +1,27 @@
 import type { EditorState, StateField } from '@bangle.dev/pm';
 import { Plugin } from '@bangle.dev/pm';
 
-import {
-  debounceFn,
-  getEditorIntersectionObserverPluginState,
-} from '@bangle.io/utils';
+import { debounceFn } from '@bangle.io/utils';
 
+import type { HeadingNodes, WatchPluginState } from './config';
 import {
-  HeadingNodes,
   WATCH_HEADINGS_PLUGIN_DEBOUNCE_MAX_WAIT,
   WATCH_HEADINGS_PLUGIN_DEBOUNCE_WAIT,
   watchHeadingsPluginKey,
-  WatchPluginState,
 } from './config';
+import { getEditorIntersectionObserverPluginState } from './helpers';
 
 export function watchHeadingsPlugin() {
   let state: StateField<WatchPluginState> = {
     init(_, state) {
       const intersectionState = getEditorIntersectionObserverPluginState(state);
+
       if (!intersectionState) {
         console.warn(
           'note-outline expects editorIntersectionObserverPluginState',
         );
       }
+
       return {
         headings: getHeadings(state, intersectionState),
       };
@@ -42,6 +41,7 @@ export function watchHeadingsPlugin() {
           headings: getHeadings(newState, intersectionState),
         };
       }
+
       return old;
     },
   };
@@ -118,6 +118,7 @@ export function getHeadings(
     state.selection.from,
     headingNodes,
   );
+
   if (nearestActiveHeading) {
     nearestActiveHeading.isActive = true;
   }
@@ -135,11 +136,13 @@ export function getHeadings(
         intersectionState.minStartPosition,
         headingNodes,
       );
+
       if (nearestNode) {
         nearestNode.hasContentInsideViewport = true;
       }
     }
   }
+
   return headingNodes;
 }
 
@@ -159,6 +162,7 @@ function findLeftNearestHeading(
 
   for (const heading of headingNodes) {
     let diff = position - heading.offset;
+
     if (diff >= 0 && diff < closestHeadingDiff) {
       closestHeadingDiff = diff;
       closestHeading = heading;
@@ -184,6 +188,7 @@ function isPositionInsideIntersection(
   if (!intersectionState) {
     return false;
   }
+
   return (
     pos >= intersectionState.minStartPosition &&
     pos <= intersectionState.maxStartPosition

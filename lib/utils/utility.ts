@@ -1,20 +1,18 @@
 import _debounceFn from 'debounce-fn';
 import { keyName } from 'w3c-keyname';
 
-import { EditorView } from '@bangle.dev/pm';
+import type { EditorView } from '@bangle.dev/pm';
 import { Emitter } from '@bangle.dev/utils';
 
-import { isMac, SPLIT_SCREEN_MIN_WIDTH } from '@bangle.io/config';
+import { isMac } from '@bangle.io/config';
+
+export { serialExecuteQueue } from '@bangle.dev/utils';
 
 export { Emitter };
 
 export function getLast<T>(array: T[]): T | undefined {
   return array[array.length - 1];
 }
-
-export const checkWidescreen = (
-  width = typeof window !== 'undefined' ? window.innerWidth : undefined,
-) => (width ? SPLIT_SCREEN_MIN_WIDTH <= width : false);
 
 // typeof navigator != 'undefined' ? /Mac/.test(navigator.platform) : false;
 // :: (Object) → (view: EditorView, event: dom.Event) → bool
@@ -34,6 +32,7 @@ export function keybindingsHelper(bindings: {
     for (let prop in map) {
       copy[normalizeKeyName(prop)] = map[prop];
     }
+
     return copy;
   }
 
@@ -47,15 +46,17 @@ export function keybindingsHelper(bindings: {
     if (event.metaKey) {
       name = 'Meta-' + name;
     }
-    if (shift !== false && event.shiftKey) {
+    if (shift && event.shiftKey) {
       name = 'Shift-' + name;
     }
+
     return name;
   }
 
   function normalizeKeyName(name: string): string {
     let parts = name.split(/-(?!$)/),
       result = parts[parts.length - 1]!;
+
     if (result === 'Space') {
       result = ' ';
     }
@@ -93,52 +94,38 @@ export function keybindingsHelper(bindings: {
     if (shift) {
       result = 'Shift-' + result;
     }
+
     return result;
   }
+
   return function (event: KeyboardEvent) {
     let name = keyName(event),
       isChar = name.length === 1 && name !== ' ';
     const direct = map[modifiers(name, event, !isChar)];
+
     // if the handler returns true prevent default it
     if (direct && direct()) {
       event.preventDefault();
+
       return;
     }
   };
 }
 
-export function cx(...args: any[]) {
-  const classes: string[] = [];
+export function cx(...args: any[]): string {
+  let classes: string = '';
   for (const arg of args) {
     if (!arg) {
       continue;
     }
-    classes.push(arg);
+    classes += arg + ' ';
   }
-  return classes.join(' ');
+
+  return classes;
 }
 
 export function sleep(t = 20): Promise<void> {
   return new Promise((res) => setTimeout(res, t));
-}
-
-/**
- * @param {Function} fn - A unary function whose paramater is non-primitive,
- *                        so that it can be cached using WeakMap
- */
-export function weakCache<T extends (arg: any) => any>(fn: T): T {
-  const cache = new WeakMap();
-  const res = (arg: any) => {
-    let value = cache.get(arg);
-    if (value) {
-      return value;
-    }
-    value = fn(arg);
-    cache.set(arg, value);
-    return value;
-  };
-
-  return res as T;
 }
 
 export function dedupeArray<T>(array: T[]) {
@@ -146,72 +133,47 @@ export function dedupeArray<T>(array: T[]) {
 }
 
 /** Based on https://developer.mozilla.org/docs/Web/HTTP/Browser_detection_using_the_user_agent */
-export function isTouchDevice() {
+export function calcIsTouchDevice(): boolean {
+  if (typeof navigator === 'undefined' || typeof window === 'undefined') {
+    return false;
+  }
+
   var hasTouchScreen = false;
+
   if ('maxTouchPoints' in navigator) {
     hasTouchScreen = navigator.maxTouchPoints > 0;
   } else if ('msMaxTouchPoints' in navigator) {
-    // @ts-ignore
-    hasTouchScreen = navigator.msMaxTouchPoints > 0;
+    hasTouchScreen = (navigator as any).msMaxTouchPoints > 0;
   } else {
     var mQ =
       typeof window !== 'undefined' &&
       window.matchMedia &&
-      matchMedia('(pointer:coarse)');
+      window.matchMedia('(pointer:coarse)');
+
     if (mQ && mQ.media === '(pointer:coarse)') {
       hasTouchScreen = !!mQ.matches;
     } else if ('orientation' in window) {
       hasTouchScreen = true; // deprecated, but good fallback
     } else {
       // Only as a last resort, fall back to user agent sniffing
-      // @ts-ignore
-      var UA = navigator.userAgent;
+      var UA = (navigator as any).userAgent;
       hasTouchScreen =
         /\b(BlackBerry|webOS|iPhone|IEMobile)\b/i.test(UA) ||
         /\b(Android|Windows Phone|iPad|iPod)\b/i.test(UA);
     }
   }
+
   return hasTouchScreen;
 }
 
-let dayJs: typeof import('dayjs') | undefined;
-export async function getDayJs({} = {}): Promise<typeof import('dayjs')> {
-  if (dayJs) {
-    return dayJs;
-  }
-  let [_dayjs, _localizedFormat]: [any, any] = (await Promise.all([
-    import('dayjs'),
-    import('dayjs/plugin/localizedFormat'),
-  ])) as [any, any];
-
-  dayJs = _dayjs.default || _dayjs;
-  _localizedFormat = _localizedFormat.default || _localizedFormat;
-  dayJs?.extend(_localizedFormat);
-  if (!dayJs) {
-    throw new Error('dayJs cannot be undefined');
-  }
-  return dayJs;
-}
-
-export function conditionalPrefix(str: string, part: string) {
-  if (str.startsWith(part)) {
-    return str;
-  }
-  return part + str;
-}
+export const isTouchDevice = calcIsTouchDevice();
 
 export function conditionalSuffix(str: string, part: string) {
   if (str.endsWith(part)) {
     return str;
   }
-  return str + part;
-}
 
-export function removeMdExtension(str: string) {
-  if (str.endsWith('.md')) {
-    return str.slice(0, -3);
-  }
-  return str;
+  return str + part;
 }
 
 // Shallow compares array in an out of order fashion.
@@ -265,28 +227,8 @@ export function findWrappingScrollable(node: Element): Element | undefined {
       }
     }
   }
+
   return undefined;
-}
-
-export function keyDisplayValue(key: string): string {
-  if (key.includes('Mod')) {
-    key = key.split('Mod').join(isMac ? '⌘' : 'Ctrl');
-  }
-
-  key = key
-    .split('-')
-    .map((r) => {
-      if (/^[A-Z]$/.test(r)) {
-        return `Shift-${r.toLocaleLowerCase()}`;
-      }
-      return r;
-    })
-    .join('-');
-
-  if (key.includes('Shift')) {
-    key = key.split('Shift').join('⇧');
-  }
-  return key;
 }
 
 export function generateUid(len = 10) {
@@ -300,8 +242,23 @@ export function assertSignal(signal: AbortSignal) {
   }
 }
 
-// Throws an abort error if a signal is already aborted.
-export function asssertNotUndefined(
+export function abortableSetInterval(
+  callback: () => void,
+  signal: AbortSignal,
+  ms: number,
+): void {
+  const timer = setInterval(callback, ms);
+  signal.addEventListener(
+    'abort',
+    () => {
+      clearInterval(timer);
+    },
+    { once: true },
+  );
+}
+
+// Throws an abort error if value is undefined.
+export function assertNotUndefined(
   value: unknown,
   message: string,
 ): asserts value {
@@ -310,24 +267,26 @@ export function asssertNotUndefined(
   }
 }
 
-export function isAbortError(error: unknown): boolean {
-  if (error instanceof DOMException && error.name === 'AbortError') {
-    return true;
-  }
-  return false;
-}
-
 export function cloneMap<K, V>(map: Map<K, V>) {
   return new Map(map.entries());
 }
 
-export function createEmptyArray(size: number) {
-  return Array.from({ length: size }, () => {
-    return undefined;
+// Adds 1 or more emptyValue to the array to make it of `size` length.
+// Returns a new array.
+// If size is smaller than `array`'s length, it will trim the array to match the size.
+export function makeArrayOfSize<T>(
+  size: number,
+  emptyValue: undefined | null,
+  array: T[],
+): Array<T | typeof emptyValue> {
+  return Array.from({ length: size }, (_, k) => {
+    if (k < array.length) {
+      return array[k];
+    }
+
+    return emptyValue;
   });
 }
-
-const hasOwnProperty = Object.prototype.hasOwnProperty;
 
 /**
  * From react https://github.com/facebook/fbjs/blob/main/packages/fbjs/src/core/shallowEqual.js#L39-L67
@@ -335,7 +294,7 @@ const hasOwnProperty = Object.prototype.hasOwnProperty;
  * when any key has values which are not strictly equal between the arguments.
  * Returns true when the values of all keys are strictly equal.
  */
-export function shallowEqual<T extends {}>(objA: any, objB: any): boolean {
+export function shallowEqual(objA: any, objB: any): boolean {
   if (Object.is(objA, objB)) {
     return true;
   }
@@ -359,7 +318,7 @@ export function shallowEqual<T extends {}>(objA: any, objB: any): boolean {
   // Test for A's keys different from B.
   for (let i = 0; i < keysA.length; i++) {
     if (
-      !hasOwnProperty.call(objB, keysA[i]!) ||
+      !Object.prototype.hasOwnProperty.call(objB, keysA[i]!) ||
       !Object.is(objA[keysA[i]!], objB[keysA[i]!])
     ) {
       return false;
@@ -372,12 +331,71 @@ export function shallowEqual<T extends {}>(objA: any, objB: any): boolean {
 export function makeSafeForCSS(name: string) {
   return name.replace(/[^a-z0-9]/g, function (s: string) {
     let c = s.charCodeAt(0);
+
     if (c === 32) {
       return '-';
     }
     if (c >= 65 && c <= 90) {
       return '_' + s.toLowerCase();
     }
+
     return '__';
   });
+}
+
+export function shuffleArray<T>(a: T[]): T[] {
+  let array: any[] = a.slice(0);
+  for (let i = array.length - 1; i > 0; i--) {
+    let j = Math.floor(Math.random() * (i + 1)); // random index from 0 to i
+    // swap elements array[i] and array[j]
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+
+  return array;
+}
+
+export enum MouseClick {
+  NewTab = 'NewTab',
+  ShiftClick = 'ShiftClick',
+  Click = 'Click',
+}
+
+export function getMouseClickType<T = Element>(
+  event: React.MouseEvent<T>,
+): MouseClick {
+  if (
+    event.ctrlKey ||
+    event.metaKey || // apple
+    (event.button && event.button === 1) // middle click, >IE9 + everyone else
+  ) {
+    return MouseClick.NewTab;
+  } else if (event.shiftKey) {
+    return MouseClick.ShiftClick;
+  }
+
+  return MouseClick.Click;
+}
+
+export async function checkConditionUntilTrue(
+  condition: () => boolean,
+  {
+    maxTries = 5,
+    interval = 2,
+    name = 'unknown_condition',
+  }: {
+    name?: string;
+    interval?: number;
+    maxTries?: number;
+  } = {},
+): Promise<void> {
+  for (let tries = 0; tries < maxTries; tries++) {
+    if (condition()) {
+      return;
+    }
+    await sleep(interval);
+  }
+
+  throw new Error(
+    `Condition ${name} did not become true within the specified time`,
+  );
 }

@@ -1,5 +1,6 @@
 import { Plugin, PluginKey } from '@bangle.dev/pm';
 
+import { hasPluginStateChanged } from '@bangle.io/editor-common/helpers';
 import type {
   EditorPluginMetadata,
   EditorWatchPluginState,
@@ -7,7 +8,6 @@ import type {
 } from '@bangle.io/shared-types';
 import {
   debounceFn,
-  hasPluginStateChanged,
   safeCancelIdleCallback,
   safeRequestIdleCallback,
 } from '@bangle.io/utils';
@@ -28,6 +28,7 @@ export function watchPluginHost(
   const key = new PluginKey<Set<SerialOperationNameType>>(
     'editor_watchPluginHost',
   );
+
   return new Plugin({
     key,
     state: {
@@ -55,7 +56,8 @@ export function watchPluginHost(
             () => {
               const state = view.state;
               const pluginState = key.getState(state);
-              if (pluginState && pluginState?.size > 0) {
+
+              if (pluginState && pluginState.size > 0) {
                 pluginState.forEach((operation) => {
                   // Avoid sending any thing related to editor instance
                   // which can cause memory leak, only send primitives

@@ -1,10 +1,8 @@
 import { Slice, SliceKey } from '@bangle.io/create-store';
-import { BaseHistory, createTo, MemoryHistory } from '@bangle.io/history';
-import {
-  pageSliceKey,
-  PageSliceStateType,
-  syncPageLocation,
-} from '@bangle.io/slice-page';
+import type { BaseHistory } from '@bangle.io/history';
+import { createTo, MemoryHistory } from '@bangle.io/history';
+import type { PageSliceStateType } from '@bangle.io/slice-page';
+import { pageSliceKey, syncPageLocation } from '@bangle.io/slice-page';
 import { assertActionName } from '@bangle.io/utils';
 
 const historySliceKey = new SliceKey<
@@ -18,7 +16,7 @@ const historySliceKey = new SliceKey<
 >('test-memory-history-slice');
 
 if (typeof jest === 'undefined') {
-  throw new Error('Can only be with jest');
+  console.warn('test-utils not using with jest');
 }
 
 export function testMemoryHistorySlice() {
@@ -71,16 +69,18 @@ const mockHistoryEffect = historySliceKey.effect(() => {
       }
 
       lastProcessed = pendingNavigation;
+
       if (pendingNavigation.preserve) {
-        history?.navigate(createTo(pendingNavigation.location, history), {
+        history.navigate(createTo(pendingNavigation.location, history), {
           replace: pendingNavigation.replaceHistory,
         });
       } else {
         let to = pendingNavigation.location.pathname || '';
+
         if (pendingNavigation.location.search) {
           to += '?' + pendingNavigation.location.search;
         }
-        history?.navigate(to, {
+        history.navigate(to, {
           replace: pendingNavigation.replaceHistory,
         });
       }
@@ -88,6 +88,7 @@ const mockHistoryEffect = historySliceKey.effect(() => {
 
     deferredOnce(store, abortSignal) {
       const history = new MemoryHistory('', (location) => {
+        // @ts-expect-error
         syncPageLocation(location)(
           store.state,
           pageSliceKey.getDispatch(store.dispatch),
@@ -99,14 +100,21 @@ const mockHistoryEffect = historySliceKey.effect(() => {
         value: { history: history },
       });
 
+      // @ts-expect-error
       syncPageLocation({
         search: history.search,
         pathname: history.pathname,
       })(store.state, pageSliceKey.getDispatch(store.dispatch));
 
-      abortSignal.addEventListener('abort', () => {
-        history.destroy();
-      });
+      abortSignal.addEventListener(
+        'abort',
+        () => {
+          history.destroy();
+        },
+        {
+          once: true,
+        },
+      );
     },
   };
 });

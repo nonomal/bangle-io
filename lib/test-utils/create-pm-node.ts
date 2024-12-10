@@ -3,9 +3,10 @@ import type { Node } from '@bangle.dev/pm';
 
 import { Extension, ExtensionRegistry } from '@bangle.io/extension-registry';
 import { markdownParser } from '@bangle.io/markdown';
+import { assertNotUndefined } from '@bangle.io/utils';
 
 if (typeof jest === 'undefined') {
-  throw new Error('Can only be with jest');
+  console.warn('test-utils not using with jest');
 }
 
 export function createPMNode(
@@ -27,6 +28,8 @@ export function createPMNode(
     extensionRegistry.specRegistry,
     extensionRegistry.markdownItPlugins,
   );
+
+  assertNotUndefined(doc, 'Doc cannot be undefined');
 
   return doc;
 }

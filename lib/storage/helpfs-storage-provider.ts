@@ -1,11 +1,11 @@
-import type { Node } from '@bangle.dev/pm';
-
 import { BaseError } from '@bangle.io/base-error';
 import { HELP_DOCS_VERSION } from '@bangle.io/config';
-import { HELP_FS_INDEX_WS_PATH, WorkspaceTypeHelp } from '@bangle.io/constants';
+import { HELP_FS_INDEX_WS_PATH, WorkspaceType } from '@bangle.io/constants';
+import type { StorageProviderOnChange } from '@bangle.io/shared-types';
+import { errorParse, errorSerialize } from '@bangle.io/utils';
 import { toFSPath } from '@bangle.io/ws-path';
 
-import { BaseStorageProvider, StorageOpts } from './base-storage';
+import type { BaseStorageProvider, StorageOpts } from './base-storage';
 import { IndexedDbStorageProvider } from './indexed-db-storage-provider';
 
 function readFileFromUnpkg(wsPath: string) {
@@ -25,13 +25,14 @@ function readFileFromUnpkg(wsPath: string) {
             message: `Encountered an error making request to unpkg.com ${r.status} ${r.statusText}`,
           });
         }
+
         return r;
       })
       .catch((z) => {
         if (z.message === 'Failed to fetch') {
-          throw new BaseError({
-            message: `Encountered an error making request to unpkg.com`,
-          });
+          console.error('Failed to fetch helpfs');
+
+          return undefined;
         }
         throw z;
       });
@@ -48,38 +49,29 @@ function readFileFromUnpkg(wsPath: string) {
       }
       const name = splitted[splitted.length - 1]!;
       const file = new File([r], name);
+
       return file;
     });
 }
 
 export class HelpFsStorageProvider implements BaseStorageProvider {
-  name = WorkspaceTypeHelp;
+  name = WorkspaceType.Help;
   displayName = 'Help documentation';
   description = '';
   hidden = true;
+  onChange: StorageProviderOnChange = () => {};
 
-  private idbProvider = new IndexedDbStorageProvider();
-
-  async newWorkspaceMetadata(wsName: string, createOpts: any) {}
-
-  async fileExists(wsPath: string, opts: StorageOpts): Promise<boolean> {
-    if (wsPath === HELP_FS_INDEX_WS_PATH) {
-      return true;
-    }
-
-    return this.idbProvider.fileExists(wsPath, opts);
-  }
-
-  async fileStat(wsPath: string, opts: StorageOpts) {
-    return this.idbProvider.fileStat(wsPath, opts);
-  }
-
+  private _idbProvider = new IndexedDbStorageProvider();
   async createFile(
     wsPath: string,
     file: File,
     opts: StorageOpts,
   ): Promise<void> {
     await this.writeFile(wsPath, file, opts);
+    this.onChange({
+      type: 'create',
+      wsPath,
+    });
   }
 
   async deleteFile(wsPath: string, opts: StorageOpts): Promise<void> {
@@ -87,17 +79,27 @@ export class HelpFsStorageProvider implements BaseStorageProvider {
       return;
     }
 
-    await this.idbProvider.deleteFile(wsPath, opts);
+    await this._idbProvider.deleteFile(wsPath, opts);
+    this.onChange({
+      type: 'delete',
+      wsPath,
+    });
   }
 
-  async readFile(wsPath: string, opts: StorageOpts): Promise<File | undefined> {
-    const res = await readFileFromUnpkg(wsPath);
-
-    if (res) {
-      return res;
+  async fileExists(wsPath: string, opts: StorageOpts): Promise<boolean> {
+    if (wsPath === HELP_FS_INDEX_WS_PATH) {
+      return true;
     }
 
-    return this.idbProvider.readFile(wsPath, opts);
+    return this._idbProvider.fileExists(wsPath, opts);
+  }
+
+  async fileStat(wsPath: string, opts: StorageOpts) {
+    return this._idbProvider.fileStat(wsPath, opts);
+  }
+
+  isSupported() {
+    return true;
   }
 
   async listAllFiles(
@@ -108,20 +110,29 @@ export class HelpFsStorageProvider implements BaseStorageProvider {
     return [
       ...new Set([
         HELP_FS_INDEX_WS_PATH,
-        ...(await this.idbProvider.listAllFiles(abortSignal, wsName, opts)),
+        ...(await this._idbProvider.listAllFiles(abortSignal, wsName, opts)),
       ]),
     ];
   }
 
-  async writeFile(
-    wsPath: string,
-    file: File,
-    opts: StorageOpts,
-  ): Promise<void> {
-    if (wsPath === HELP_FS_INDEX_WS_PATH) {
-      return;
+  async newWorkspaceMetadata(wsName: string, createOpts: any) {}
+
+  parseError(errorString: string) {
+    try {
+      return errorParse(JSON.parse(errorString));
+    } catch (error) {
+      return undefined;
     }
-    await this.idbProvider.writeFile(wsPath, file, opts);
+  }
+
+  async readFile(wsPath: string, opts: StorageOpts): Promise<File | undefined> {
+    const res = await readFileFromUnpkg(wsPath);
+
+    if (res) {
+      return res;
+    }
+
+    return this._idbProvider.readFile(wsPath, opts);
   }
 
   async renameFile(
@@ -132,6 +143,31 @@ export class HelpFsStorageProvider implements BaseStorageProvider {
     if (wsPath === HELP_FS_INDEX_WS_PATH) {
       return;
     }
-    await this.idbProvider.renameFile(wsPath, newWsPath, opts);
+    await this._idbProvider.renameFile(wsPath, newWsPath, opts);
+
+    this.onChange({
+      type: 'rename',
+      oldWsPath: wsPath,
+      newWsPath,
+    });
+  }
+
+  serializeError(error: Error) {
+    return JSON.stringify(errorSerialize(error));
+  }
+
+  async writeFile(
+    wsPath: string,
+    file: File,
+    opts: StorageOpts,
+  ): Promise<void> {
+    if (wsPath === HELP_FS_INDEX_WS_PATH) {
+      return;
+    }
+    await this._idbProvider.writeFile(wsPath, file, opts);
+    this.onChange({
+      type: 'write',
+      wsPath,
+    });
   }
 }

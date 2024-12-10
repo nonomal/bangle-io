@@ -1,12 +1,9 @@
-// atom components
+import './Dialog/style.css';
 import './ErrorBoundary.css';
 import './Icons.css';
-// higher level components
 import './InlinePaletteUI/InlinePaletteUI.css';
 import './Input/Input.css';
-import './Sidebar/Sidebar.css';
-import './TextButton.css';
+import './misc.css';
 import './PrettyKeybinding.css';
+import './Sidebar/Sidebar.css';
 import './UniversalPalette/UniversalPalette.css';
-import './Modal/style.css';
-import './CenteredPage.css';

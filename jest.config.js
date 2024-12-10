@@ -1,12 +1,13 @@
-module.exports = {
+const config = {
   testRunner: 'jest-circus/runner',
   testPathIgnorePatterns: [
     `<rootDir>/.yarn`,
-    `<rootDir>/tooling/e2e`,
     `<rootDir>/tooling/playwright-e2e`,
   ],
+  transform: {
+    '^.+\\.(t|j)sx?$': ['@swc/jest'],
+  },
   transformIgnorePatterns: [],
-  coverageReporters: ['json', 'lcov', 'text', 'clover'],
   coveragePathIgnorePatterns: [`<rootDir>/.yarn`],
   // collectCoverage: true,
   clearMocks: true,
@@ -21,5 +22,18 @@ module.exports = {
       '<rootDir>/tooling/_scripts/fileMock.js',
     '\\.(css)$': '<rootDir>/tooling/_scripts/styleMock.js',
   },
-  testMatch: ['**/?(*.)+(spec|test).[jt]s?(x)'],
+};
+module.exports = {
+  projects: [
+    {
+      displayName: 'regular',
+      testMatch: ['**/?(*.)+(spec|test).[jt]s?(x)'],
+      ...config,
+    },
+    {
+      displayName: 'network',
+      testMatch: ['**/?(*.)+(network-test).[jt]s?(x)'],
+      ...config,
+    },
+  ],
 };

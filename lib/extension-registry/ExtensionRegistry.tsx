@@ -3,7 +3,8 @@ import React from 'react';
 import { SpecRegistry } from '@bangle.dev/core';
 import type { RenderNodeViewsFunction as BangleRenderNodeViewsFunction } from '@bangle.dev/react';
 
-import { Slice } from '@bangle.io/create-store';
+import type { Slice } from '@bangle.io/create-store';
+import type { EffectCreator, Slice as NsmSlice } from '@bangle.io/nsm-3';
 import type {
   EditorWatchPluginState,
   SerialOperationDefinitionType,
@@ -11,8 +12,14 @@ import type {
   SerialOperationKeybindingMapping,
   SerialOperationNameType,
 } from '@bangle.io/shared-types';
+import type { BaseStorageProvider } from '@bangle.io/storage';
 
-import { ApplicationConfig, EditorConfig, Extension } from './Extension';
+import type {
+  ApplicationConfig,
+  EditorConfig,
+  Extension,
+  ThemeConfig,
+} from './Extension';
 
 type Unnest<T> = T extends Array<infer U> ? U : T;
 
@@ -22,6 +29,7 @@ function filterFlatMap<R, K extends keyof R>(
   flatten = true,
 ): Array<Unnest<Exclude<R[K], undefined>>> {
   let items = array.filter((item) => Boolean(item[field]));
+
   if (flatten) {
     return items.flatMap((item) => item[field]) as any;
   }
@@ -33,95 +41,158 @@ export class ExtensionRegistry {
   specRegistry: SpecRegistry;
   // TODO move this to a method
   markdownItPlugins: any[];
-  private renderReactNodeViewLookup: Exclude<
-    EditorConfig['renderReactNodeView'],
+  renderExtensionEditorComponents = () => {
+    const result = this._editorConfig
+      .map((e) => {
+        const { ReactComponent } = e;
+
+        if (ReactComponent) {
+          return <ReactComponent key={e.name} />;
+        }
+
+        return undefined;
+      })
+      .filter((e): e is JSX.Element => Boolean(e));
+
+    return result;
+  };
+
+  renderApplicationComponents = () => {
+    const result = this._extensions
+      .map((extension) => {
+        const { ReactComponent } = extension.application ?? {};
+
+        if (ReactComponent) {
+          return <ReactComponent key={extension.name} />;
+        }
+
+        return undefined;
+      })
+      .filter((e): e is JSX.Element => Boolean(e));
+
+    return result;
+  };
+
+  registerSerialOperationHandler = (cb: SerialOperationHandler) => {
+    this._serialOperationHandlers.add(cb);
+
+    return () => {
+      this._serialOperationHandlers.delete(cb);
+    };
+  };
+
+  private _dialogs: Exclude<ApplicationConfig['dialogs'], undefined>;
+
+  private _editorConfig: EditorConfig[];
+  private _editorWatchPluginStates: Exclude<
+    EditorConfig['watchPluginStates'],
     undefined
   >;
-  private serialOperationHandlers: Set<SerialOperationHandler>;
-  private registeredSerialOperations: SerialOperationDefinitionType[];
-  private editorConfig: EditorConfig[];
-  private operationKeybindingMapping: SerialOperationKeybindingMapping;
-  private operationHandlers: Array<
-    Exclude<ApplicationConfig['operationHandler'], undefined>
-  >;
-  private sidebars: Exclude<ApplicationConfig['sidebars'], undefined>;
-  private storageProviders: {
-    [storageProviderName: string]: Exclude<
-      ApplicationConfig['storageProvider'],
-      undefined
-    >;
-  };
-  private noteFormatProviders: {
+
+  private _noteFormatProviders: {
     [noteFormatProviderName: string]: Exclude<
       ApplicationConfig['noteFormatProvider'],
       undefined
     >;
   };
-  private onStorageErrorHandlers: {
+
+  private _noteSidebarWidgets: Exclude<
+    ApplicationConfig['noteSidebarWidgets'],
+    undefined
+  >;
+
+  private _nsmEffects: EffectCreator[];
+  private _nsmSlices: Array<NsmSlice<any, any, any>>;
+
+  private _onStorageErrorHandlers: {
     [storageProviderName: string]: Exclude<
       ApplicationConfig['onStorageError'],
       undefined
     >;
   };
 
-  private slices: Slice<any, any>[];
+  private _operationHandlers: Array<
+    Exclude<ApplicationConfig['operationHandler'], undefined>
+  >;
 
-  private editorWatchPluginStates: Exclude<
-    EditorConfig['watchPluginStates'],
+  private _operationKeybindingMapping: SerialOperationKeybindingMapping;
+  private _registeredSerialOperations: SerialOperationDefinitionType[];
+  private _renderReactNodeViewLookup: Exclude<
+    EditorConfig['renderReactNodeView'],
     undefined
   >;
 
-  private noteSidebarWidgets: Exclude<
-    ApplicationConfig['noteSidebarWidgets'],
-    undefined
-  >;
+  private _serialOperationHandlers: Set<SerialOperationHandler>;
+  private _sidebars: Exclude<ApplicationConfig['sidebars'], undefined>;
+  private _slices: Slice[];
 
-  public extensionsInitialState: { [name: string]: any };
+  private _storageProviders: {
+    [storageProviderName: string]: Exclude<
+      ApplicationConfig['storageProvider'],
+      undefined
+    >;
+  };
+
+  private _themes: ThemeConfig[];
+
   constructor(
-    private extensions: Extension[] = [],
+    private _extensions: Extension[] = [],
     // TODO move this to an extension
     _markdownItPlugins: any[] = [],
   ) {
-    this.validate();
+    this._validate();
 
-    this.extensionsInitialState = Object.fromEntries(
-      extensions.map((r) => [r.name, r.initialState]),
-    );
+    this._editorConfig = _extensions
+      .map((e) => e.editor)
+      .filter((r): r is EditorConfig => Boolean(r));
 
-    this.editorConfig = extensions.map((e) => e.editor);
     this.specRegistry = new SpecRegistry([
-      ...filterFlatMap(this.editorConfig, 'specs'),
+      ...filterFlatMap(this._editorConfig, 'specs'),
     ]);
     this.markdownItPlugins = [
       ..._markdownItPlugins,
-      ...filterFlatMap(this.editorConfig, 'markdownItPlugins'),
+      ...filterFlatMap(this._editorConfig, 'markdownItPlugins'),
     ];
-    this.renderReactNodeViewLookup = Object.fromEntries(
-      filterFlatMap(this.editorConfig, 'renderReactNodeView', false).flatMap(
+    this._renderReactNodeViewLookup = Object.fromEntries(
+      filterFlatMap(this._editorConfig, 'renderReactNodeView', false).flatMap(
         (obj) => Object.entries(obj),
       ),
     );
 
-    const applicationConfig = extensions.map((e) => e.application);
+    this._themes = filterFlatMap(_extensions, 'themes', true);
 
-    this.serialOperationHandlers = new Set();
-    this.editorWatchPluginStates = filterFlatMap(
-      this.editorConfig,
+    const applicationConfig = _extensions
+      .map((e) => e.application)
+      .filter((r): r is ApplicationConfig => Boolean(r));
+
+    this._serialOperationHandlers = new Set();
+
+    this._editorWatchPluginStates = filterFlatMap(
+      this._editorConfig,
       'watchPluginStates',
     );
-    this.registeredSerialOperations = filterFlatMap(
+    this._registeredSerialOperations = filterFlatMap(
       applicationConfig,
       'operations',
     );
-    this.sidebars = filterFlatMap(applicationConfig, 'sidebars');
-    this.noteSidebarWidgets = filterFlatMap(
+    this._sidebars = filterFlatMap(applicationConfig, 'sidebars');
+    assertUniqueName(this._sidebars, 'sidebars');
+
+    this._dialogs = filterFlatMap(applicationConfig, 'dialogs');
+    assertUniqueName(this._dialogs, 'dialogs');
+
+    this._noteSidebarWidgets = filterFlatMap(
       applicationConfig,
       'noteSidebarWidgets',
     );
+    assertUniqueName(this._noteSidebarWidgets, 'noteSidebarWidgets');
 
-    this.slices = filterFlatMap(applicationConfig, 'slices');
-    this.operationHandlers = extensions
-      .map((e) => e.application.operationHandler)
+    this._slices = filterFlatMap(applicationConfig, 'slices');
+    this._nsmSlices = filterFlatMap(applicationConfig, 'nsmSlices');
+    this._nsmEffects = filterFlatMap(applicationConfig, 'nsmEffects');
+
+    this._operationHandlers = _extensions
+      .map((e) => e.application?.operationHandler)
       .filter(
         (
           operationHandler,
@@ -131,36 +202,122 @@ export class ExtensionRegistry {
         > => operationHandler != null,
       );
 
-    this.operationKeybindingMapping =
+    this._operationKeybindingMapping =
       this._getSerialOperationKeybindingMapping();
 
-    this.storageProviders = Object.fromEntries(
-      filterFlatMap(applicationConfig, 'storageProvider').map((r) => [
-        r.name,
-        r,
-      ]),
+    const storageProviders = filterFlatMap(
+      applicationConfig,
+      'storageProvider',
+    );
+    assertUniqueName(storageProviders, 'storageProviders');
+    this._storageProviders = Object.fromEntries(
+      storageProviders.map((r) => [r.name, r]),
     );
 
-    this.noteFormatProviders = Object.fromEntries(
+    this._noteFormatProviders = Object.fromEntries(
       filterFlatMap(applicationConfig, 'noteFormatProvider').map((r) => [
         r.name,
         r,
       ]),
     );
 
-    this.onStorageErrorHandlers = Object.fromEntries(
+    this._onStorageErrorHandlers = Object.fromEntries(
       applicationConfig
         .filter((r) => Boolean(r.storageProvider) && Boolean(r.onStorageError))
         .map((a) => [a.storageProvider!.name, a.onStorageError!]),
     );
   }
-  private validate() {
-    if (
-      new Set(this.extensions.filter((r) => Boolean(r.name)).map((r) => r.name))
-        .size !== this.extensions.length
-    ) {
-      throw new Error('Extension name must be unique');
-    }
+
+  getAllStorageProviders(): BaseStorageProvider[] {
+    return Object.values(this._storageProviders);
+  }
+
+  getDialog(name: string) {
+    return this._dialogs.find((d) => d.name === name);
+  }
+
+  getEditorWatchPluginStates(): EditorWatchPluginState[] {
+    return this._editorWatchPluginStates;
+  }
+
+  getNoteFormatProvider(name: string) {
+    return this._noteFormatProviders[name];
+  }
+
+  getNoteSidebarWidgets() {
+    return this._noteSidebarWidgets;
+  }
+
+  getNsmEffects() {
+    return this._nsmEffects;
+  }
+
+  getNsmSlices() {
+    return this._nsmSlices;
+  }
+
+  getOnStorageErrorHandlers(name: string) {
+    return this._onStorageErrorHandlers[name];
+  }
+
+  getOperationHandlers() {
+    return this._operationHandlers;
+  }
+
+  getPlugins() {
+    return [
+      ...filterFlatMap(this._editorConfig, 'highPriorityPlugins'),
+      ...filterFlatMap(this._editorConfig, 'plugins'),
+    ];
+  }
+
+  getRegisteredOperationKeybinding(
+    name: SerialOperationNameType,
+  ): string | undefined {
+    return this._registeredSerialOperations.find((a) => a.name === name)
+      ?.keybinding;
+  }
+
+  getRegisteredOperations(): Readonly<SerialOperationDefinitionType[]> {
+    return this._registeredSerialOperations;
+  }
+
+  getSerialOperationHandlers() {
+    return this._serialOperationHandlers;
+  }
+
+  getSerialOperationKeybindingMapping() {
+    return this._operationKeybindingMapping;
+  }
+
+  getSidebars() {
+    return this._sidebars;
+  }
+
+  getSlices() {
+    return this._slices;
+  }
+
+  getStorageProvider(name: string) {
+    return this._storageProviders[name];
+  }
+
+  getThemes() {
+    return this._themes;
+  }
+
+  isExtensionDefined(name: string) {
+    return this._extensions.some((e) => e.name === name);
+  }
+
+  renderReactNodeViews({
+    nodeViewRenderArg,
+  }: {
+    nodeViewRenderArg: Parameters<BangleRenderNodeViewsFunction>[0];
+  }): React.ReactNode {
+    return this._renderReactNodeViewLookup[nodeViewRenderArg.node.type.name]?.({
+      nodeViewRenderArg,
+    });
   }
 
   private _getSerialOperationKeybindingMapping(): SerialOperationKeybindingMapping {
@@ -171,105 +328,18 @@ export class ExtensionRegistry {
     return Object.fromEntries(operations);
   }
 
-  renderReactNodeViews({
-    nodeViewRenderArg,
-  }: {
-    nodeViewRenderArg: Parameters<BangleRenderNodeViewsFunction>[0];
-  }): React.ReactNode {
-    return this.renderReactNodeViewLookup[nodeViewRenderArg.node.type.name]?.({
-      nodeViewRenderArg,
-    });
+  private _validate() {
+    assertUniqueName(this._extensions, 'extensions');
   }
+}
 
-  getPlugins() {
-    return [
-      ...filterFlatMap(this.editorConfig, 'highPriorityPlugins'),
-      ...filterFlatMap(this.editorConfig, 'plugins'),
-    ];
+function assertUniqueName<T extends { name: string }>(
+  items: T[],
+  debugString: string,
+) {
+  if (new Set(items.map((r) => r.name)).size !== items.length) {
+    throw new Error(
+      `In "${debugString}" there is an existing entity with same name.`,
+    );
   }
-
-  getSidebars() {
-    return this.sidebars;
-  }
-
-  getNoteSidebarWidgets() {
-    return this.noteSidebarWidgets;
-  }
-
-  getSerialOperationKeybindingMapping() {
-    return this.operationKeybindingMapping;
-  }
-
-  getEditorWatchPluginStates(): EditorWatchPluginState[] {
-    return this.editorWatchPluginStates;
-  }
-
-  getSlices() {
-    return this.slices;
-  }
-
-  getStorageProvider(name: string) {
-    return this.storageProviders[name];
-  }
-
-  getNoteFormatProvider(name: string) {
-    return this.noteFormatProviders[name];
-  }
-
-  getOnStorageErrorHandlers(name: string) {
-    return this.onStorageErrorHandlers[name];
-  }
-
-  renderExtensionEditorComponents = () => {
-    const result = this.editorConfig
-      .map((e) => {
-        const { ReactComponent } = e;
-        if (ReactComponent) {
-          return <ReactComponent key={e.name} />;
-        }
-        return undefined;
-      })
-      .filter((e): e is JSX.Element => Boolean(e));
-    return result;
-  };
-
-  getRegisteredOperations(): Readonly<SerialOperationDefinitionType[]> {
-    return this.registeredSerialOperations;
-  }
-
-  getRegisteredOperationKeybinding(
-    name: SerialOperationNameType,
-  ): string | undefined {
-    return this.registeredSerialOperations.find((a) => a.name === name)
-      ?.keybinding;
-  }
-
-  getOperationHandlers() {
-    return this.operationHandlers;
-  }
-
-  getSerialOperationHandlers() {
-    return this.serialOperationHandlers;
-  }
-
-  renderApplicationComponents = () => {
-    const result = this.extensions
-      .map((extension) => {
-        const { ReactComponent } = extension.application;
-        if (ReactComponent) {
-          return <ReactComponent key={extension.name} />;
-        }
-        return undefined;
-      })
-      .filter((e): e is JSX.Element => Boolean(e));
-
-    return result;
-  };
-
-  registerSerialOperationHandler = (cb: SerialOperationHandler) => {
-    this.serialOperationHandlers.add(cb);
-    return () => {
-      this.serialOperationHandlers.delete(cb);
-    };
-  };
 }

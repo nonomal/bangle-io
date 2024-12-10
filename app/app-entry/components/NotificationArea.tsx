@@ -1,34 +1,58 @@
 import React from 'react';
 
-import { useSliceState } from '@bangle.io/bangle-store-context';
-import { useSerialOperationContext } from '@bangle.io/serial-operation-context';
+import { useSerialOperationContext } from '@bangle.io/api';
+import { useNsmSlice } from '@bangle.io/bangle-store-context';
+import { SEVERITY } from '@bangle.io/constants';
 import type { NotificationPayloadType } from '@bangle.io/shared-types';
+import { nsmNotification } from '@bangle.io/slice-notification';
 import {
-  dismissNotification,
-  notificationSliceKey,
-} from '@bangle.io/slice-notification';
-import {
-  ButtonIcon,
+  Button,
+  BUTTON_VARIANT,
   CheckCircleIcon,
   CloseIcon,
   ExclamationCircleIcon,
   ExclamationIcon,
   InformationCircleIcon,
-  TextButton,
 } from '@bangle.io/ui-components';
+import { useInterval } from '@bangle.io/utils';
+
+const CLEAR_INTERVAL = 8000;
 
 export function NotificationArea() {
-  const {
-    store,
-    sliceState: { notifications },
-  } = useSliceState(notificationSliceKey);
+  const [{ notifications }, dispatch] = useNsmSlice(
+    nsmNotification.nsmNotificationSlice,
+  );
+
+  useInterval(
+    () => {
+      let currentTime = Date.now();
+      let toRemove = notifications
+        .filter((n) => {
+          return (
+            n.transient &&
+            n.createdAt &&
+            CLEAR_INTERVAL < currentTime - n.createdAt
+          );
+        })
+        .map((n) => {
+          return n.uid;
+        });
+
+      if (toRemove.length > 0) {
+        dispatch(nsmNotification.dismissNotification(toRemove));
+      }
+    },
+    [notifications, dispatch],
+    2000,
+  );
+
   return (
     <div className="fixed bottom-0 right-0 z-50">
       {notifications.map((n) => (
         <Notification
           key={n.uid}
           onDismiss={() => {
-            dismissNotification({ uid: n.uid })(store.state, store.dispatch);
+            dispatch(nsmNotification.dismissNotification(n.uid));
           }}
           title={n.title}
           content={n.content?.split('\n').map((r, i) => (
@@ -42,21 +66,19 @@ export function NotificationArea() {
   );
 }
 
-const Severity: Record<
+const SeverityMap: Record<
   Exclude<NotificationPayloadType['severity'], undefined>,
   () => React.ReactNode
 > = {
   error: () => (
-    <ExclamationCircleIcon style={{ color: 'var(--severity-error-color)' }} />
+    <ExclamationCircleIcon className="w-6 h-6 color-colorCriticalIcon" />
   ),
-  warning: () => (
-    <ExclamationIcon style={{ color: 'var(--severity-warning-color)' }} />
-  ),
+  warning: () => <ExclamationIcon className="w-6 h-6 color-colorCautionIcon" />,
   info: () => (
-    <InformationCircleIcon style={{ color: 'var(--severity-info-color)' }} />
+    <InformationCircleIcon className="w-6 h-6 color-colorNeutralIcon" />
   ),
   success: () => (
-    <CheckCircleIcon style={{ color: 'var(--severity-success-color)' }} />
+    <CheckCircleIcon className="w-6 h-6 color-colorPositiveIcon" />
   ),
 };
 
@@ -64,7 +86,7 @@ export function Notification({
   content = '',
   title,
   buttons,
-  severity = 'info',
+  severity = SEVERITY.INFO,
   onDismiss,
 }: {
   title?: string;
@@ -77,26 +99,23 @@ export function Notification({
 
   return (
     <div
-      className="app-entry_notification w-96 relative p-2 mx-4 my-4 transition duration-100 ease-in-out shadow"
-      style={{
-        backgroundColor: 'var(--window-bgColor-1)',
-        boxShadow: '0px 0px 4px 2px rgba(0, 0, 0, 0.15)',
-      }}
+      data-testid="app-entry_notification"
+      className="bg-colorBgLayerFloat w-96 relative p-2 mx-4 my-4 transition duration-100 ease-in-out shadow-xl rounded shadow-lg border-neutral"
     >
       <div className="flex flex-col w-full">
         <div className="flex flex-row">
-          <div className="mr-2">{Severity[severity]()}</div>
+          <div className="mr-2">{SeverityMap[severity]()}</div>
           <div className="flex-grow">{title}</div>
           <div>
-            <ButtonIcon
-              hint="dismiss"
-              hintPos="left"
-              onClick={async (e) => {
+            <Button
+              size="xs"
+              variant={BUTTON_VARIANT.TRANSPARENT}
+              ariaLabel="dismiss notification"
+              leftIcon={<CloseIcon />}
+              onPress={() => {
                 onDismiss();
               }}
-            >
-              <CloseIcon style={{ height: 16, width: 16 }} />
-            </ButtonIcon>
+            />
           </div>
         </div>
         <div className="w-full text-sm flex flex-col">
@@ -106,17 +125,30 @@ export function Notification({
       <div className="flex flex-row-reverse w-full mt-3">
         {buttons &&
           buttons.map((b, i) => (
-            <TextButton
+            <Button
               key={i}
-              hintPos="left"
+              tooltipPlacement="left"
               className="ml-3"
-              onClick={async () => {
+              size="sm"
+              tone={
+                severity === 'error'
+                  ? 'critical'
+                  : severity === 'warning'
+                  ? 'caution'
+                  : severity === 'success'
+                  ? 'positive'
+                  : 'secondary'
+              }
+              variant={severity === 'info' ? 'soft' : 'solid'}
+              onPress={async () => {
+                if (b.dismissOnClick) {
+                  onDismiss();
+                }
                 dispatchSerialOperation({ name: b.operation });
               }}
-              hint={b.hint}
-            >
-              {b.title}
-            </TextButton>
+              ariaLabel={b.hint}
+              text={b.title}
+            />
           ))}
       </div>
     </div>

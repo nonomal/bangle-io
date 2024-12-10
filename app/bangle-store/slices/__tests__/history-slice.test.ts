@@ -1,5 +1,5 @@
 /**
- * @jest-environment jsdom
+ * @jest-environment @bangle.io/jsdom-env
  */
 import { BrowserHistory } from '@bangle.io/history';
 import { goToLocation, pageSlice, pageSliceKey } from '@bangle.io/slice-page';
@@ -7,7 +7,7 @@ import {
   workspaceSliceInitialState,
   workspaceSliceKey,
 } from '@bangle.io/slice-workspace';
-import { createTestStore } from '@bangle.io/test-utils';
+import { createBareStore } from '@bangle.io/test-utils';
 
 import { historySlice } from '../history-slice';
 
@@ -15,6 +15,7 @@ jest.mock('@bangle.io/slice-workspace', () => {
   const other = jest.requireActual('@bangle.io/slice-workspace');
   const workspaceSliceKey = other.workspaceSliceKey;
   workspaceSliceKey.getSliceStateAsserted = jest.fn();
+
   return {
     ...other,
     workspaceSliceKey,
@@ -23,7 +24,7 @@ jest.mock('@bangle.io/slice-workspace', () => {
 
 const workspaceStateMock = workspaceSliceKey[
   'getSliceStateAsserted'
-] as jest.MockedFunction<typeof workspaceSliceKey['getSliceStateAsserted']>;
+] as jest.MockedFunction<(typeof workspaceSliceKey)['getSliceStateAsserted']>;
 
 let historyPushSpy: jest.SpyInstance, historyReplaceSpy: jest.SpyInstance;
 
@@ -43,7 +44,7 @@ beforeEach(() => {
 
 describe('watchHistoryEffect', () => {
   test('initializes & destroys correctly', async () => {
-    const { actionsDispatched } = createTestStore({
+    const { actionsDispatched } = createBareStore({
       sliceKey: pageSliceKey,
       slices: [pageSlice(), historySlice()],
     });
@@ -76,7 +77,7 @@ describe('watchHistoryEffect', () => {
 describe('applyPendingNavigation', () => {
   test('works', async () => {
     jest.useFakeTimers();
-    const { store } = createTestStore({
+    const { store } = createBareStore({
       slices: [pageSlice(), historySlice()],
       sliceKey: pageSliceKey,
     });
@@ -95,7 +96,7 @@ describe('applyPendingNavigation', () => {
   });
 
   test('respects replace', async () => {
-    const { store } = createTestStore({
+    const { store } = createBareStore({
       slices: [pageSlice(), historySlice()],
       sliceKey: pageSliceKey,
     });
@@ -114,7 +115,7 @@ describe('applyPendingNavigation', () => {
   });
 
   test('works with object location and replace=true', async () => {
-    const { store } = createTestStore({
+    const { store } = createBareStore({
       slices: [pageSlice(), historySlice()],
       sliceKey: pageSliceKey,
     });
@@ -139,7 +140,7 @@ describe('applyPendingNavigation', () => {
   });
 
   test('works when location is string', async () => {
-    const { store } = createTestStore({
+    const { store } = createBareStore({
       slices: [pageSlice(), historySlice()],
       sliceKey: pageSliceKey,
     });
@@ -160,7 +161,7 @@ describe('applyPendingNavigation', () => {
   });
 
   test('works with object location', async () => {
-    const { store } = createTestStore({
+    const { store } = createBareStore({
       slices: [pageSlice(), historySlice()],
       sliceKey: pageSliceKey,
     });

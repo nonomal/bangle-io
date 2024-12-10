@@ -1,5 +1,9 @@
-import { expect, Page, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect } from '@playwright/test';
 
+import { PRIMARY_EDITOR_INDEX } from '@bangle.io/constants';
+
+import { withBangle as test } from '../fixture-with-bangle';
 import {
   clearEditor,
   createNewNote,
@@ -9,26 +13,31 @@ import {
   getEditorLocator,
 } from '../helpers';
 
-test.beforeEach(async ({ page, baseURL }, testInfo) => {
-  await page.goto(baseURL!, { waitUntil: 'networkidle' });
+test.beforeEach(async ({ page, bangleApp }, testInfo) => {
+  await bangleApp.open();
   let wsName = await createWorkspace(page);
   const noteName = 'my-mark-test-123';
   await createNewNote(page, wsName, noteName);
-  await clearEditor(page, 0);
-  await getEditorLocator(page, 0, { focus: true });
+  await clearEditor(page, PRIMARY_EDITOR_INDEX);
+  await getEditorLocator(page, PRIMARY_EDITOR_INDEX, { focus: true });
 });
 
 const pasteSliceJson = async (page: Page, sliceJson: object) => {
   await page.evaluate(async (sliceJson) => {
-    const h = (window as any)._e2eHelpers;
-    h._sliceManualPaste(
-      h._primaryEditor.view,
-      h._EditorSlice.fromJSON(h._editorSchema, sliceJson),
+    const e2e = window._nsmE2e;
+
+    if (!e2e) {
+      throw new Error('e2e not found');
+    }
+
+    e2e.sliceManualPaste(
+      e2e.primaryEditor!.view,
+      e2e.EditorSlice.fromJSON(e2e.primaryEditor!.view.state.schema, sliceJson),
     );
   }, sliceJson);
 };
 
-test.describe.parallel('Pasting rich test', () => {
+test.describe('Pasting rich test', () => {
   test('heading', async ({ page, context }) => {
     await pasteSliceJson(page, {
       content: [
@@ -48,8 +57,8 @@ test.describe.parallel('Pasting rich test', () => {
       openStart: 1,
       openEnd: 1,
     });
-    expect(await getEditorDebugString(page, 0)).toEqual(
-      `doc(heading(\"Hello\"), paragraph)`,
+    expect(await getEditorDebugString(page, PRIMARY_EDITOR_INDEX)).toEqual(
+      `doc(heading("Hello"), paragraph)`,
     );
   });
 
@@ -72,8 +81,8 @@ test.describe.parallel('Pasting rich test', () => {
       openStart: 1,
       openEnd: 1,
     });
-    expect(await getEditorDebugString(page, 0)).toEqual(
-      `doc(paragraph(\"Hello\"))`,
+    expect(await getEditorDebugString(page, PRIMARY_EDITOR_INDEX)).toEqual(
+      `doc(paragraph("Hello"))`,
     );
   });
 
@@ -112,7 +121,7 @@ test.describe.parallel('Pasting rich test', () => {
 
     await pasteSliceJson(page, sliceJson);
 
-    expect(await getEditorDebugString(page, 0)).toEqual(
+    expect(await getEditorDebugString(page, PRIMARY_EDITOR_INDEX)).toEqual(
       'doc(bulletList(listItem(paragraph("Test in the house"))), paragraph)',
     );
   });
@@ -152,7 +161,7 @@ test.describe.parallel('Pasting rich test', () => {
 
     await pasteSliceJson(page, sliceJson);
 
-    expect(await getEditorJSON(page, 0)).toEqual({
+    expect(await getEditorJSON(page, PRIMARY_EDITOR_INDEX)).toEqual({
       content: [
         {
           attrs: {
@@ -216,7 +225,7 @@ test.describe.parallel('Pasting rich test', () => {
 
     await pasteSliceJson(page, sliceJson);
 
-    expect(await getEditorJSON(page, 0)).toEqual({
+    expect(await getEditorJSON(page, PRIMARY_EDITOR_INDEX)).toEqual({
       content: [
         {
           attrs: { collapseContent: null, level: 2 },

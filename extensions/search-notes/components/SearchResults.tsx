@@ -2,10 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { NodeSelection, Selection } from '@bangle.dev/pm';
 
+import { nsmApi2, wsPathHelpers } from '@bangle.io/api';
 import { NoteLink } from '@bangle.io/contextual-ui-components';
 import type { SearchMatch, SearchResultItem } from '@bangle.io/search-pm-node';
-import { useEditorManagerContext } from '@bangle.io/slice-editor-manager';
-import { useWorkspaceContext } from '@bangle.io/slice-workspace';
 import {
   ButtonIcon,
   ChevronDownIcon,
@@ -13,7 +12,6 @@ import {
   Sidebar,
 } from '@bangle.io/ui-components';
 import { cx, safeRequestAnimationFrame, usePrevious } from '@bangle.io/utils';
-import { resolvePath } from '@bangle.io/ws-path';
 
 import { HighlightText } from './HighlightText';
 
@@ -31,11 +29,13 @@ function useCollapseMarker(
         const onClick = () => {
           updateCache((c) => {
             const s = new Set(c);
+
             if (s.has(r)) {
               s.delete(r);
             } else {
               s.add(r);
             }
+
             return s;
           });
         };
@@ -73,10 +73,10 @@ export function SearchResults({
     results,
     collapseAllCounter,
   );
-  const { primaryEditor } = useEditorManagerContext();
-  const {
-    openedWsPaths: { primaryWsPath },
-  } = useWorkspaceContext();
+
+  const { widescreen } = nsmApi2.ui.useUi();
+  const { primaryWsPath } = nsmApi2.workspace.useWorkspace();
+
   const [currentlyClicked, updateCurrentlyClicked] = useState<null | {
     wsPath: string;
     match: SearchMatch;
@@ -85,11 +85,13 @@ export function SearchResults({
 
   useEffect(() => {
     let cancelled = false;
+
     if (currentlyClicked && primaryWsPath === currentlyClicked.wsPath) {
       // TODO this is a mess, we need a better api to know when the editor is ready
       setTimeout(() => {
         safeRequestAnimationFrame(() => {
-          const editor = primaryEditor;
+          const editor = nsmApi2.editor.getPrimaryEditor();
+
           if (cancelled || !editor || editor.destroyed) {
             return;
           }
@@ -111,6 +113,7 @@ export function SearchResults({
             //  - after some time set a text selection clearing the rectangle
 
             const parentNode = tr.doc.nodeAt(currentlyClicked.match.parentPos);
+
             if (parentNode) {
               tr = tr.setSelection(
                 NodeSelection.create(tr.doc, currentlyClicked.match.parentPos),
@@ -145,7 +148,7 @@ export function SearchResults({
     return () => {
       cancelled = true;
     };
-  }, [currentlyClicked, primaryWsPath, primaryEditor]);
+  }, [currentlyClicked, primaryWsPath]);
 
   // cannot used currently clicked because it gets set to null
   // right after focusing
@@ -154,13 +157,15 @@ export function SearchResults({
   return (
     <>
       {results.map((r, i) => {
+        const wsPath = wsPathHelpers.createWsPath(r.uid);
+
         return (
           <React.Fragment key={i}>
             <Sidebar.Row2
               titleClassName="text-sm font-bold"
               className={cx(
-                `search-result-note-match pl-1 pr-3  select-none`,
-                primaryWsPath === r.uid && 'active',
+                `B-search-notes_search-result-note-match pl-1 pr-3  select-none`,
+                primaryWsPath === r.uid && 'BU_active',
               )}
               extraInfoClassName="text-sm"
               extraInfoOnNewLine
@@ -168,8 +173,8 @@ export function SearchResults({
               item={{
                 uid: 'search-notes-result-' + i,
                 showDividerAbove: false,
-                title: resolvePath(r.uid).fileNameWithoutExt,
-                extraInfo: resolvePath(r.uid).dirPath,
+                title: wsPathHelpers.resolvePath2(wsPath).fileNameWithoutExt,
+                extraInfo: wsPathHelpers.resolvePath2(wsPath).dirPath,
                 leftNode: (
                   <ButtonIcon>
                     {isCollapsed(r) ? (
@@ -197,15 +202,23 @@ export function SearchResults({
                   <NoteLink
                     wsPath={r.uid}
                     className={cx(
-                      'rounded-sm block search-result-text-match ',
+                      'rounded-sm block B-search-notes_search-result-text-match ',
                       primaryWsPath === r.uid &&
                         prevClicked?.matchIndex === j &&
-                        'previously-clicked',
+                        'B-search-notes_previously-clicked',
                       j === 0 ? 'mt-3' : 'mt-4',
-                      j === r.matches.length - 1 ? 'last-item' : '',
+                      j === r.matches.length - 1
+                        ? 'pb-4 border-b-1 border-colorNeutralBorder'
+                        : '',
                     )}
                     onClick={() => {
-                      if (primaryEditor && primaryEditor.destroyed !== true) {
+                      const primaryEditor = nsmApi2.editor.getPrimaryEditor();
+
+                      // if not in a widescreen close the sidebar
+                      // after click
+                      if (!widescreen) {
+                        nsmApi2.ui.closeSidebar();
+                      } else if (primaryEditor && !primaryEditor.destroyed) {
                         updateCurrentlyClicked({
                           wsPath: r.uid,
                           match: matchObj,

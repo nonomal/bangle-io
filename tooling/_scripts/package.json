@@ -1,5 +1,5 @@
 {
-  "name": "scripts",
+  "name": "@bangle.io/scripts",
   "version": "0.0.0",
   "authors": [
     {
@@ -23,19 +23,37 @@
   "main": "index.js",
   "module": "index.js",
   "scripts": {
-    "g:package-patrol": "yarn node package-patrol"
+    "g:run-scripts": "yarn prep && yarn ts-node --project $PROJECT_CWD/tsconfig.tsnode.json index.ts",
+    "prep": "cd $PROJECT_CWD && cd tooling/_scripts",
+    "g:css:stylelint-update-regex": "yarn prep && yarn ts-node --project $PROJECT_CWD/tsconfig.tsnode.json generate-stylelint-regex.ts",
+    "g:script:find-unused-dependencies": "yarn prep && yarn ts-node --project $PROJECT_CWD/tsconfig.tsnode.json one-off/find-unused-dependencies.ts",
+    "g:script:find-incorrect-import-style": "yarn prep && yarn ts-node --project $PROJECT_CWD/tsconfig.tsnode.json one-off/find-incorrect-import-style.ts",
+    "g:script:mermaid-dependency": "yarn prep && yarn ts-node --project $PROJECT_CWD/tsconfig.tsnode.json one-off/mermaid-dependency.ts",
+    "g:remove-portals": "yarn node ./tooling/_scripts/remove-portals && yarn install"
   },
   "publishConfig": {},
   "dependencies": {
+    "@bangle.io/config-template": "^0.0.7",
     "@bangle.io/constants": "workspace:*",
+    "@bangle.io/css-vars": "workspace:*",
+    "@bangle.io/extract-css-vars": "workspace:*",
+    "@bangle.io/mini-js-utils": "workspace:*",
     "@bangle.io/shared-types": "workspace:*",
     "@bangle.io/test-utils": "workspace:*",
+    "@bangle.io/test-utils-2": "workspace:*",
+    "@bangle.io/yarn-workspace-helpers": "workspace:*",
+    "@types/prettier": "^2.7.0",
+    "concurrently": "^7.0.0",
+    "cross-fetch": "^3.1.5",
     "date-fns": "^2.25.0",
     "domexception": "^4.0.0",
-    "idb-keyval": "^5.1.5",
-    "prettier": "^2.5.1",
-    "tslib": "^2.3.1",
-    "typescript": "^4.5.5"
+    "execa": "^5.1.1",
+    "fake-indexeddb": "^4.0.2",
+    "globby": "^13.1.3",
+    "prettier": "^2.8.8",
+    "ts-node": "^10.9.1",
+    "tslib": "2.6.0",
+    "typescript": "5.1.6"
   },
   "license": "AGPL-3.0-or-later"
 }

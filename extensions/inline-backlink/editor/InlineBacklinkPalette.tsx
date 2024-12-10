@@ -1,23 +1,23 @@
 import React, { useEffect, useMemo } from 'react';
 import reactDOM from 'react-dom';
 
-import { EditorState, EditorView } from '@bangle.dev/pm';
+import type { EditorState, EditorView } from '@bangle.dev/pm';
 import { useEditorViewContext } from '@bangle.dev/react';
 
+import { nsmApi2 } from '@bangle.io/api';
 import { byLengthAsc, useFzfSearch } from '@bangle.io/fzf-search';
 import {
   replaceSuggestionMarkWith,
   useInlinePaletteItems,
   useInlinePaletteQuery,
 } from '@bangle.io/inline-palette';
-import { useWorkspaceContext } from '@bangle.io/slice-workspace';
 import { InlinePaletteRow, UniversalPalette } from '@bangle.io/ui-components';
+import { assertNotUndefined, insertAt } from '@bangle.io/utils';
 import {
-  conditionalSuffix,
-  insertAt,
-  removeMdExtension,
-} from '@bangle.io/utils';
-import { resolvePath } from '@bangle.io/ws-path';
+  removeExtension,
+  resolvePath,
+  suffixWithNoteExtension,
+} from '@bangle.io/ws-path';
 
 import { backlinkNodeName, palettePluginKey } from '../config';
 import { getBacklinkPath, wsPathFromQuery } from '../utils';
@@ -25,7 +25,10 @@ import { getBacklinkPath, wsPathFromQuery } from '../utils';
 const FZF_SEARCH_LIMIT = 12;
 
 // Creating this also closes the palette
-const createBacklinkNode = (wsPath: string, allNoteWsPaths: string[]) => {
+const createBacklinkNode = (
+  wsPath: string,
+  allNoteWsPaths: readonly string[],
+) => {
   return (
     state: EditorState,
     dispatch: EditorView['dispatch'] | undefined,
@@ -33,6 +36,8 @@ const createBacklinkNode = (wsPath: string, allNoteWsPaths: string[]) => {
   ) => {
     const nodeType = state.schema.nodes[backlinkNodeName];
     const backlinkPath = getBacklinkPath(wsPath, allNoteWsPaths);
+
+    assertNotUndefined(nodeType, 'wikiLink must be defined');
 
     return replaceSuggestionMarkWith(
       palettePluginKey,
@@ -42,16 +47,53 @@ const createBacklinkNode = (wsPath: string, allNoteWsPaths: string[]) => {
     )(state, dispatch, view);
   };
 };
+
 export function InlineBacklinkPalette() {
+  const view = useEditorViewContext();
+
+  if (!view || view.isDestroyed) {
+    return null;
+  }
+
+  return <InlineBacklinkPalettePortal />;
+}
+
+function InlineBacklinkPalettePortal() {
   const { query, counter, tooltipContentDOM, isVisible } =
     useInlinePaletteQuery(palettePluginKey);
 
   return reactDOM.createPortal(
-    <div className="shadow-2xl inline-palette-wrapper">
-      <div className="inline-palette-items-wrapper">
+    <InlineBacklinkPaletteWrapper
+      query={query}
+      counter={counter}
+      isVisible={isVisible}
+      editorView={useEditorViewContext()}
+    />,
+    tooltipContentDOM,
+  );
+}
+
+export function InlineBacklinkPaletteWrapper({
+  query,
+  counter,
+  isVisible,
+  editorView,
+}: {
+  query: string;
+  counter: number;
+  isVisible: boolean;
+  editorView: EditorView;
+}) {
+  return (
+    <div className="shadow-2xl B-ui-components_inline-palette-wrapper flex flex-col bg-colorNeutralBgLayerFloat">
+      <div className="B-ui-components_inline-palette-items-wrapper">
         {/* TODO I am unable to hide inner when palette is invisible */}
         {isVisible && (
-          <InlineBacklinkPaletteInner query={query} counter={counter} />
+          <InlineBacklinkPaletteInner
+            query={query}
+            counter={counter}
+            editorView={editorView}
+          />
         )}
         <UniversalPalette.PaletteInfo>
           <UniversalPalette.PaletteInfoItem>
@@ -65,8 +107,7 @@ export function InlineBacklinkPalette() {
           </UniversalPalette.PaletteInfoItem>
         </UniversalPalette.PaletteInfo>
       </div>
-    </div>,
-    tooltipContentDOM,
+    </div>
   );
 }
 
@@ -74,27 +115,30 @@ const EMPTY_ARRAY: string[] = [];
 
 function InlineBacklinkPaletteInner({
   query,
+  editorView: view,
   counter,
 }: {
   query: string;
   counter: number;
+  editorView: EditorView;
 }) {
-  const view = useEditorViewContext();
-  const { wsName, noteWsPaths = EMPTY_ARRAY } = useWorkspaceContext();
+  const { wsName, noteWsPaths = EMPTY_ARRAY } =
+    nsmApi2.workspace.useWorkspace();
 
-  const match = useFzfSearch<string>(noteWsPaths, query, {
+  const match = useFzfSearch(noteWsPaths, query, {
     limit: FZF_SEARCH_LIMIT,
-    selector: (item) => resolvePath(item).filePath,
+    selector: (item: any) => resolvePath(item, true).filePath,
     tiebreakers: [byLengthAsc],
   });
 
   const items = useMemo(() => {
     let res = match.map((r) => {
       const wsPath = r.item;
+
       return {
         wsPath: wsPath,
         uid: wsPath,
-        title: removeMdExtension(resolvePath(wsPath).filePath),
+        title: removeExtension(resolvePath(wsPath, true).filePath),
         editorExecuteCommand: () => {
           return createBacklinkNode(wsPath, noteWsPaths);
         },
@@ -104,7 +148,8 @@ function InlineBacklinkPaletteInner({
     const exactMatch = res.find(
       (item) =>
         item.title === query ||
-        conditionalSuffix(query, '.md') === resolvePath(item.wsPath).filePath,
+        suffixWithNoteExtension(query) ===
+          resolvePath(item.wsPath, true).filePath,
     );
 
     if (!exactMatch && query.length > 0 && wsName) {
@@ -113,7 +158,7 @@ function InlineBacklinkPaletteInner({
       let createItem = {
         uid: 'create-' + wsPath,
         wsPath: wsPath,
-        title: 'Create: ' + removeMdExtension(resolvePath(wsPath).filePath),
+        title: 'Create: ' + removeExtension(resolvePath(wsPath).filePath),
         editorExecuteCommand: () => {
           return createBacklinkNode(wsPath, noteWsPaths);
         },

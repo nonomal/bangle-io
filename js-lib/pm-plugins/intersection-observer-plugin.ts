@@ -16,6 +16,7 @@ const safeRequestAnimationFrame =
           callback(currTime + timeToCall);
         }, timeToCall);
         lastTime = currTime + timeToCall;
+
         return id;
       };
 
@@ -55,6 +56,7 @@ export function intersectionObserverPlugin({
 
       apply(tr, oldPluginState, oldState, newState) {
         const meta = tr.getMeta(pluginKey) as IntersectionObserverPluginState;
+
         if (meta) {
           let { minStartPosition: minPosition, maxStartPosition: maxPosition } =
             meta;
@@ -80,6 +82,7 @@ export function intersectionObserverPlugin({
             ),
           };
         }
+
         return oldPluginState;
       },
     },
@@ -104,6 +107,7 @@ export function intersectionObserverPlugin({
 
           if (typeof ratio === 'number' && ratio > 0) {
             intersection++;
+
             if (typeof pos === 'number') {
               if (pos < state.minStartPosition) {
                 state.minStartPosition = pos;
@@ -116,8 +120,9 @@ export function intersectionObserverPlugin({
         });
 
         const stateSame =
-          prevDispatched?.maxStartPosition === state.maxStartPosition &&
-          prevDispatched?.minStartPosition === state.minStartPosition;
+          prevDispatched &&
+          prevDispatched.maxStartPosition === state.maxStartPosition &&
+          prevDispatched.minStartPosition === state.minStartPosition;
 
         if (intersection > 0 && !stateSame) {
           editorView.dispatch(editorView.state.tr.setMeta(pluginKey, state));
@@ -206,12 +211,14 @@ export function getDocsChildren(view: EditorView): Set<Element> {
       child = child.children[0];
     }
     const node = child.nodeDOM;
+
     if (node instanceof Element) {
       positionMap.set(node, offset);
       list1.add(node);
     }
     offset = offset + child.size;
   }
+
   return list1;
 }
 
@@ -221,5 +228,6 @@ function isIntersectionAPIAvailable() {
       return true;
     }
   }
+
   return false;
 }

@@ -6,10 +6,12 @@ import {
   orderedList,
   paragraph,
 } from '@bangle.dev/base-components';
-import { EditorState, EditorView, setBlockType } from '@bangle.dev/pm';
+import type { EditorState, EditorView } from '@bangle.dev/pm';
+import { setBlockType } from '@bangle.dev/pm';
 import { rafCommandExec } from '@bangle.dev/utils';
 
 import { replaceSuggestionMarkWith } from '@bangle.io/inline-palette';
+import { assertNotUndefined } from '@bangle.io/utils';
 
 import {
   chainedInsertParagraphAbove,
@@ -33,6 +35,9 @@ const setHeadingBlockType =
   (level: number) =>
   (state: EditorState, dispatch: EditorView['dispatch'] | undefined) => {
     const type = state.schema.nodes.heading;
+
+    assertNotUndefined(type, 'heading must be defined');
+
     return setBlockType(type, { level })(state, dispatch);
   };
 
@@ -48,7 +53,7 @@ export function useEditorItems() {
         disabled: (state: any) => {
           return isList()(state);
         },
-        editorExecuteCommand: ({}) => {
+        editorExecuteCommand: () => {
           return (
             state: EditorState,
             dispatch: EditorView['dispatch'] | undefined,
@@ -57,6 +62,7 @@ export function useEditorItems() {
             if (view) {
               rafCommandExec(view, chainedInsertParagraphBelow());
             }
+
             return replaceSuggestionMarkWith(palettePluginKey, '')(
               state,
               dispatch,
@@ -74,7 +80,7 @@ export function useEditorItems() {
         disabled: (state: any) => {
           return isList()(state);
         },
-        editorExecuteCommand: ({}) => {
+        editorExecuteCommand: () => {
           return (
             state: EditorState,
             dispatch: EditorView['dispatch'] | undefined,
@@ -83,6 +89,7 @@ export function useEditorItems() {
             if (view) {
               rafCommandExec(view, chainedInsertParagraphAbove());
             }
+
             return replaceSuggestionMarkWith(palettePluginKey, '')(
               state,
               dispatch,
@@ -97,7 +104,7 @@ export function useEditorItems() {
         title: 'Paragraph',
         group: 'editor',
         description: 'Convert the current block to paragraph',
-        editorExecuteCommand: ({}) => {
+        editorExecuteCommand: () => {
           return (
             state: EditorState,
             dispatch: EditorView['dispatch'] | undefined,
@@ -120,6 +127,7 @@ export function useEditorItems() {
                   if (queryIsOrderedListActive()(state)) {
                     return toggleOrderedList()(state, dispatch, view);
                   }
+
                   return convertToParagraph()(state, dispatch, view);
                 },
               );
@@ -140,7 +148,7 @@ export function useEditorItems() {
         group: 'editor',
         keywords: ['unordered', 'lists'],
         description: 'Convert the current block to bullet list',
-        editorExecuteCommand: ({}) => {
+        editorExecuteCommand: () => {
           return (
             state: EditorState,
             dispatch: EditorView['dispatch'] | undefined,
@@ -149,6 +157,7 @@ export function useEditorItems() {
             if (view) {
               rafCommandExec(view, toggleBulletList());
             }
+
             return replaceSuggestionMarkWith(palettePluginKey, '')(
               state,
               dispatch,
@@ -164,7 +173,7 @@ export function useEditorItems() {
         group: 'editor',
         keywords: ['todo', 'lists', 'checkbox', 'checked'],
         description: 'Convert the current block to todo list',
-        editorExecuteCommand: ({}) => {
+        editorExecuteCommand: () => {
           return (
             state: EditorState,
             dispatch: EditorView['dispatch'] | undefined,
@@ -173,6 +182,7 @@ export function useEditorItems() {
             if (view) {
               rafCommandExec(view, toggleTodoList());
             }
+
             return replaceSuggestionMarkWith(palettePluginKey, '')(
               state,
               dispatch,
@@ -188,7 +198,7 @@ export function useEditorItems() {
         title: 'Ordered List',
         keywords: ['numbered', 'lists'],
         description: 'Convert the current block to ordered list',
-        editorExecuteCommand: ({}) => {
+        editorExecuteCommand: () => {
           return (
             state: EditorState,
             dispatch: EditorView['dispatch'] | undefined,
@@ -197,6 +207,7 @@ export function useEditorItems() {
             if (view) {
               rafCommandExec(view, toggleOrderedList());
             }
+
             return replaceSuggestionMarkWith(palettePluginKey, '')(
               state,
               dispatch,
@@ -215,7 +226,7 @@ export function useEditorItems() {
         disabled: (state: any) => {
           return !isList()(state);
         },
-        editorExecuteCommand: ({}) => {
+        editorExecuteCommand: () => {
           return (
             state: EditorState,
             dispatch: EditorView['dispatch'] | undefined,
@@ -224,6 +235,7 @@ export function useEditorItems() {
             if (view) {
               rafCommandExec(view, insertEmptySiblingListAbove());
             }
+
             return replaceSuggestionMarkWith(palettePluginKey, '')(
               state,
               dispatch,
@@ -242,7 +254,7 @@ export function useEditorItems() {
         disabled: (state: any) => {
           return !isList()(state);
         },
-        editorExecuteCommand: ({}) => {
+        editorExecuteCommand: () => {
           return (
             state: EditorState,
             dispatch: EditorView['dispatch'] | undefined,
@@ -253,6 +265,7 @@ export function useEditorItems() {
                 rafCommandExec(view, insertEmptySiblingListBelow());
               }
             }
+
             return replaceSuggestionMarkWith(palettePluginKey, '')(
               state,
               dispatch,
@@ -264,6 +277,7 @@ export function useEditorItems() {
 
       ...Array.from({ length: 3 }, (_, i) => {
         const level = i + 1;
+
         return PaletteItem.create({
           uid: 'headingConvert' + level,
           title: 'H' + level,
@@ -271,6 +285,7 @@ export function useEditorItems() {
           description: 'Convert the current block to heading level ' + level,
           disabled: (state: any) => {
             const result = isList()(state);
+
             return result;
           },
           editorExecuteCommand: () => {
@@ -282,6 +297,7 @@ export function useEditorItems() {
               if (view) {
                 rafCommandExec(view, setHeadingBlockType(level));
               }
+
               return replaceSuggestionMarkWith(palettePluginKey, '')(
                 state,
                 dispatch,

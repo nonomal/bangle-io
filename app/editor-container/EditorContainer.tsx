@@ -1,42 +1,88 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-import { useBangleStoreContext } from '@bangle.io/bangle-store-context';
-import { Editor } from '@bangle.io/editor';
-import { closeEditor, splitEditor } from '@bangle.io/shared-operations';
-import { useEditorManagerContext } from '@bangle.io/slice-editor-manager';
 import {
-  checkFileExists,
-  useWorkspaceContext,
-} from '@bangle.io/slice-workspace';
-import { Page } from '@bangle.io/ui-components';
+  useNsmSlice,
+  useNsmSliceState,
+  useSerialOperationContext,
+} from '@bangle.io/api';
+import { useNsmSliceDispatch } from '@bangle.io/bangle-store-context';
+import {
+  CORE_OPERATIONS_CLOSE_EDITOR,
+  CORE_OPERATIONS_TOGGLE_EDITOR_SPLIT,
+  CorePalette,
+  PRIMARY_EDITOR_INDEX,
+} from '@bangle.io/constants';
+import { vars } from '@bangle.io/css-vars';
+import { Editor } from '@bangle.io/editor';
+import { nsmSliceWorkspace } from '@bangle.io/nsm-slice-workspace';
+import type {
+  EditorIdType,
+  EternalVars,
+  WsPath,
+} from '@bangle.io/shared-types';
+import {
+  nsmEditorManagerSlice,
+  toggleEditing,
+} from '@bangle.io/slice-editor-manager';
+import { nsmNotification } from '@bangle.io/slice-notification';
+import { nsmUI, nsmUISlice } from '@bangle.io/slice-ui';
 import { cx, useDestroyRef } from '@bangle.io/utils';
+import { fs } from '@bangle.io/workspace-info';
 import { resolvePath } from '@bangle.io/ws-path';
 
-import { EditorBar } from './EditorBar';
+import { Editorbar } from './Editorbar';
+import { EditorIssueComp } from './EditorIssueComp';
 
 export function EditorContainer({
   widescreen,
   editorId,
   wsPath: incomingWsPath,
+  eternalVars,
 }: {
   widescreen: boolean;
-  editorId: number;
-  wsPath: string | undefined;
+  editorId: EditorIdType;
+  wsPath: WsPath | undefined;
+  eternalVars: EternalVars;
 }) {
   const { noteExists, wsPath } = useHandleWsPath(incomingWsPath);
-  const { openedWsPaths } = useWorkspaceContext();
-  const { focusedEditorId } = useEditorManagerContext();
-  const bangleStore = useBangleStoreContext();
+  const { openedWsPaths } = useNsmSliceState(nsmSliceWorkspace);
+  const { editingAllowed, focusedEditorId } = useNsmSliceState(
+    nsmEditorManagerSlice,
+  );
 
-  const isSplitEditorOpen = openedWsPaths.openCount > 0;
+  const { dispatchSerialOperation } = useSerialOperationContext();
+  const editorStoreDispatch = useNsmSliceDispatch(nsmEditorManagerSlice);
+
+  const [, uiDispatch] = useNsmSlice(nsmUISlice);
+
+  const isSplitEditorOpen = Boolean(openedWsPaths.secondaryWsPath);
 
   const onPressSecondaryEditor = useCallback(() => {
-    splitEditor()(bangleStore.state, bangleStore.dispatch);
-  }, [bangleStore]);
+    dispatchSerialOperation({
+      name: CORE_OPERATIONS_TOGGLE_EDITOR_SPLIT,
+    });
+  }, [dispatchSerialOperation]);
 
-  const onClose = useCallback(() => {
-    closeEditor(editorId)(bangleStore.state, bangleStore.dispatch);
-  }, [bangleStore, editorId]);
+  const onCloseEditor = useCallback(() => {
+    dispatchSerialOperation({
+      name: CORE_OPERATIONS_CLOSE_EDITOR,
+      value: editorId,
+    });
+  }, [dispatchSerialOperation, editorId]);
+
+  const openNotesPalette = useCallback(() => {
+    uiDispatch(nsmUI.togglePalette(CorePalette.Notes));
+  }, [uiDispatch]);
+
+  const { editorIssue, onPressEditorIssue } = useEditorIssue(wsPath);
+
+  const onEnableEditing = useCallback(() => {
+    editorStoreDispatch(
+      toggleEditing({
+        editingAllowed: true,
+      }),
+    );
+  }, [editorStoreDispatch]);
 
   let children;
 
@@ -55,38 +101,93 @@ export function EditorContainer({
       <Editor
         editorId={editorId}
         wsPath={wsPath}
-        className={`editor-container_editor editor-container_editor-${editorId}`}
+        eternalVars={eternalVars}
+        className={`B-editor-container_editor B-editor-container_editor-${editorId}`}
       />
     );
   }
 
   return (
-    <Page
-      widescreen={widescreen}
-      headerBgColor="var(--window-bgColor-0) "
-      stickyHeader={Boolean(widescreen)}
-      header={
-        widescreen &&
-        wsPath && (
-          <EditorBar
-            isActive={focusedEditorId === editorId}
-            wsPath={wsPath}
-            onClose={onClose}
-            showSplitEditor={editorId === 0}
-            onPressSecondaryEditor={onPressSecondaryEditor}
-            isSplitEditorOpen={isSplitEditorOpen}
-          />
-        )
-      }
+    <div
       className={cx(
-        'editor-container_editor-container',
-        'editor-container_editor-container-' + editorId,
+        'B-editor-container_editor-container',
+        'B-editor-container_editor-container-' + editorId,
         widescreen && 'overflow-y-scroll',
+        'w-full h-full flex flex-col items-center',
       )}
+      style={{
+        backgroundColor: vars.misc.editorBg,
+      }}
     >
-      {children}
-    </Page>
+      {wsPath && (
+        <div className="w-full sticky top-0 z-10">
+          {widescreen && (
+            <Editorbar
+              isActive={focusedEditorId === editorId}
+              wsPath={wsPath}
+              onClose={onCloseEditor}
+              showSplitEditor={editorId === PRIMARY_EDITOR_INDEX}
+              onPressSecondaryEditor={onPressSecondaryEditor}
+              isSplitEditorOpen={isSplitEditorOpen}
+              openNotesPalette={openNotesPalette}
+              onEnableEditing={onEnableEditing}
+              editingDisabled={!editingAllowed}
+            />
+          )}
+          {editorIssue && (
+            <EditorIssueComp
+              className={widescreen ? '' : 'pt-3'}
+              editorIssue={editorIssue}
+              onPress={onPressEditorIssue}
+            />
+          )}
+        </div>
+      )}
+
+      <div
+        className={cx('w-full smallscreen:min-h-screen')}
+        style={{
+          maxWidth: `min(${vars.misc.pageMaxWidth}, 100vw)`,
+          padding: vars.misc.pagePadding,
+        }}
+      >
+        {children}
+      </div>
+    </div>
   );
+}
+
+function useEditorIssue(wsPath: WsPath | undefined) {
+  const [, uiDispatch] = useNsmSlice(nsmUISlice);
+  const { editorIssues } = useNsmSliceState(
+    nsmNotification.nsmNotificationSlice,
+  );
+  const editorIssue = wsPath
+    ? editorIssues.find((e) => e.wsPath === wsPath)
+    : undefined;
+
+  const { dispatchSerialOperation } = useSerialOperationContext();
+
+  const onPressEditorIssue = useCallback(() => {
+    if (!editorIssue) {
+      return;
+    }
+
+    const { serialOperation } = editorIssue;
+
+    if (serialOperation) {
+      dispatchSerialOperation({ name: serialOperation });
+    } else {
+      uiDispatch(
+        nsmUI.showGenericErrorModal({
+          title: editorIssue.title,
+          description: editorIssue.description,
+        }),
+      );
+    }
+  }, [uiDispatch, dispatchSerialOperation, editorIssue]);
+
+  return { editorIssue, onPressEditorIssue };
 }
 
 /**
@@ -97,26 +198,21 @@ export function EditorContainer({
  * @param {*} incomingWsPath
  * @returns
  */
-export function useHandleWsPath(incomingWsPath?: string) {
-  const [wsPath, updateWsPath] = useState<string | undefined>(undefined);
+function useHandleWsPath(incomingWsPath?: WsPath) {
+  const [wsPath, updateWsPath] = useState<WsPath | undefined>(undefined);
   const [noteExists, updateFileExists] = useState<
     'LOADING' | 'FOUND' | 'NOT_FOUND' | 'NO_WS_PATH'
   >(incomingWsPath ? 'LOADING' : 'NO_WS_PATH');
 
-  const { bangleStore } = useWorkspaceContext();
   const destroyedRef = useDestroyRef();
 
   useEffect(() => {
     if (incomingWsPath) {
       updateFileExists('LOADING');
-      checkFileExists(incomingWsPath)(
-        bangleStore.state,
-        bangleStore.dispatch,
-        bangleStore,
-      ).then(
+      fs.fileExists(incomingWsPath).then(
         (r) => {
           if (!destroyedRef.current) {
-            if (r === true) {
+            if (r) {
               updateFileExists('FOUND');
             } else {
               updateFileExists('NOT_FOUND');
@@ -124,7 +220,7 @@ export function useHandleWsPath(incomingWsPath?: string) {
             updateWsPath(incomingWsPath);
           }
         },
-        () => {
+        (error) => {
           // silence any errors here as other part of code will handle them
         },
       );
@@ -133,7 +229,7 @@ export function useHandleWsPath(incomingWsPath?: string) {
       updateFileExists('NO_WS_PATH');
       updateWsPath(undefined);
     }
-  }, [incomingWsPath, bangleStore, wsPath, destroyedRef]);
+  }, [incomingWsPath, wsPath, destroyedRef]);
 
   return { noteExists, wsPath };
 }

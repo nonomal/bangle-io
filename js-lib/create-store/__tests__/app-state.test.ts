@@ -9,12 +9,12 @@ describe('AppState', () => {
     expect(appState).toMatchInlineSnapshot(`
       AppState {
         "config": AppStateConfig {
-          "fields": Array [],
+          "fields": [],
           "opts": undefined,
-          "slices": Array [],
-          "slicesByKey": Object {},
+          "slices": [],
+          "slicesByKey": {},
         },
-        "slicesCurrentState": Object {},
+        "slicesCurrentState": {},
       }
     `);
   });
@@ -138,6 +138,7 @@ describe('AppState', () => {
           if (action.name === 'for-a') {
             return action.value.no;
           }
+
           return value;
         },
       },
@@ -149,6 +150,7 @@ describe('AppState', () => {
         init: () => 2,
         apply: (action, value, appState) => {
           partialStateCheck = sliceA.getSliceState(appState);
+
           return value;
         },
       },
@@ -174,10 +176,12 @@ describe('AppState', () => {
       state: {
         init() {
           initThis = this;
+
           return 0;
         },
         apply(action, val) {
           applyThis = this;
+
           return val;
         },
       },
@@ -271,6 +275,7 @@ describe('AppState', () => {
           if (action.name === 'for-a') {
             return action.value.n;
           }
+
           return value;
         },
       },
@@ -284,6 +289,7 @@ describe('AppState', () => {
           if (action.name === 'for-b') {
             return action.value.n;
           }
+
           return value;
         },
       },
@@ -342,7 +348,7 @@ describe('AppState', () => {
       const sliceFields = { myslice1: slice1, myslice2: slice2 };
       const json = state.stateToJSON({ sliceFields: sliceFields });
       expect(json).toMatchInlineSnapshot(`
-        Object {
+        {
           "myslice1": 3,
         }
       `);
@@ -374,7 +380,7 @@ describe('AppState', () => {
 
       const sliceFields = {};
       const json = state.stateToJSON({ sliceFields: sliceFields });
-      expect(json).toMatchInlineSnapshot(`Object {}`);
+      expect(json).toMatchInlineSnapshot(`{}`);
 
       const parsedState = AppState.stateFromJSON({
         slices: [slice1],
@@ -403,6 +409,7 @@ describe('AppState', () => {
               name: 'for-b-appended',
             };
           }
+
           return undefined;
         },
       });
@@ -452,6 +459,7 @@ describe('AppState', () => {
               value: { emoji: '💩' },
             };
           }
+
           return undefined;
         },
       });
@@ -480,12 +488,14 @@ describe('AppState', () => {
         },
         appendAction(actions): any {
           slice1Actions.push([...actions]);
+
           if (actions.some((a) => a.name.startsWith('2-'))) {
             return {
               name: '1-appended',
               value: { data: '1 ' },
             };
           }
+
           return undefined;
         },
       });
@@ -501,16 +511,19 @@ describe('AppState', () => {
         },
         appendAction(actions): any {
           slice2Actions.push([...actions]);
+
           if (
             (actions.some((a) => a.name.startsWith('1-')) && times < 4) ||
             actions[0].name === 'start'
           ) {
             times++;
+
             return {
               name: '2-appended-' + times,
               value: { data: '2 ' },
             };
           }
+
           return undefined;
         },
       });

@@ -10,10 +10,16 @@
   "cSpell.words": [
     "abortable",
     "backlink",
+    "capp",
+    "Comlink",
+    "comms",
     "dhancha",
+    "editorbar",
     "naukar",
+    "smallscreen",
     "titlebar",
     "Unmount",
+    "vite",
     "worktree",
     "Worktrees"
   ],
@@ -38,8 +44,18 @@
     "titleBar.activeBackground": "#6b2347",
     "titleBar.activeForeground": "#e7e7e7",
     "titleBar.inactiveBackground": "#6b234799",
-    "titleBar.inactiveForeground": "#e7e7e799"
+    "titleBar.inactiveForeground": "#e7e7e799",
+    "commandCenter.border": "#e7e7e799"
   },
   "peacock.color": "#6b2347",
-  "editor.formatOnSave": true
+  "editor.formatOnSave": true,
+  "CSSNavigation.excludeGlobPatterns": [
+    "**/node_modules/**",
+    "**/bower_components/**",
+    "**/vendor/**",
+    "**/coverage/**",
+    "**/.yarn/**"
+  ],
+  "CSSNavigation.ignoreSameNameCSSFile": false,
+  "CSSNavigation.enableLogLevelMessage": true
 }

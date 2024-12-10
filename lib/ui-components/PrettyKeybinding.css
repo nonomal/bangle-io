@@ -1,10 +1,11 @@
-.ui-components_pretty-keybinding > *:last-child {
+.B-ui-components_pretty-keybinding > *:last-child {
   margin-right: 0;
 }
 
-.ui-components_pretty-keybinding-kbd {
+.B-ui-components_pretty-keybinding-kbd {
   display: inline-block;
-  background-color: var(--window-kbd-bgColor);
+  background-color: var(--BV-miscKbdBg);
+  color: var(--BV-miscKbdText);
   margin-right: 0.25rem;
   text-align: center;
   vertical-align: baseline;

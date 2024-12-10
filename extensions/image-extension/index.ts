@@ -26,10 +26,11 @@ const extension = Extension.create({
         calculateType: (state, prevType) => {
           if (
             state.selection instanceof NodeSelection &&
-            state.selection?.node?.type.name === 'image'
+            state.selection.node.type.name === 'image'
           ) {
             return 'imageMenu';
           }
+
           return null;
         },
       }),

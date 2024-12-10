@@ -1,11 +1,11 @@
 declare namespace jest {
-  interface Matchers<R> {
-    toEqualDocument(value: any): any;
-    toEqualDocAndSelection(value: any): any;
+  interface Matchers {
+    toEqualDocument: (value: any) => any;
+    toEqualDocAndSelection: (value: any) => any;
   }
 }
 
-namespace JSX {
+declare namespace JSX {
   export interface IntrinsicElements {
     para: any;
     doc: any;

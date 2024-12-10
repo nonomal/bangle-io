@@ -1,21 +1,9 @@
 import type { BangleEditor } from '@bangle.dev/core';
 
-import type {
-  ApplicationStore,
-  SliceSideEffect,
-} from '@bangle.io/create-store';
-import type { JsonObject } from '@bangle.io/shared-types';
-
 import type { OpenedEditorsConfig } from './opened-editors-config';
 
-export type EditorIdType = number | undefined;
-
-export type EditorDispatchType = ApplicationStore<
-  EditorSliceState,
-  EditorManagerAction
->['dispatch'];
-
-export type SideEffect = SliceSideEffect<EditorSliceState, EditorManagerAction>;
+// TODO: can make this a nominal type
+export type EditorIdType = number;
 
 export interface EditorSliceState {
   // WARNING: avoid using editor in the useMemo or any React Hooks or React.memo or React.PureComponent
@@ -23,39 +11,15 @@ export interface EditorSliceState {
   // but an editor will never reused once it is detroyed.
   // Please see https://github.com/bangle-io/bangle-io/blob/dev/lib/editor/Editor.tsx for
   // an indepth explaination.
-  focusedEditorId: number | undefined;
-  editors: (BangleEditor | undefined)[];
+  focusedEditorId: EditorIdType | undefined;
+  mainEditors: Array<BangleEditor | undefined>;
   editorConfig: OpenedEditorsConfig;
   primaryEditor: BangleEditor | undefined;
   secondaryEditor: BangleEditor | undefined;
   editingAllowed: boolean;
+  // the editor that was last opened
+  // the most recent editor id is the first in array
+  editorOpenOrder: EditorIdType[];
+  disableEditingCounter: number | undefined;
+  searchQuery: RegExp | undefined;
 }
-
-export type EditorManagerAction =
-  | {
-      name: 'action::@bangle.io/slice-editor-manager:set-editor';
-      value: { editor: BangleEditor | undefined; editorId: number };
-    }
-  | {
-      name: 'action::@bangle.io/slice-editor-manager:toggle-editing';
-    }
-  | {
-      name: 'action::@bangle.io/slice-editor-manager:on-focus-update';
-      value: { editorId: number | undefined };
-    }
-  | {
-      name: 'action::@bangle.io/slice-editor-manager:update-scroll-position';
-      value: {
-        editorId: number;
-        wsPath: string;
-        scrollPosition: number;
-      };
-    }
-  | {
-      name: 'action::@bangle.io/slice-editor-manager:update-initial-selection-json';
-      value: {
-        editorId: number;
-        wsPath: string;
-        selectionJson: JsonObject;
-      };
-    };

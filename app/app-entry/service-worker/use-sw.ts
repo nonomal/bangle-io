@@ -13,7 +13,6 @@ let intervalRef: any;
 export function useRegisterSW() {
   const [needRefresh, setNeedRefresh] = useState(false);
   const [offlineReady, setOfflineReady] = useState(false);
-
   log({ needRefresh, offlineReady });
 
   const [updateServiceWorker] = useState(
@@ -34,6 +33,7 @@ export function useRegisterSW() {
         },
         onRegistered(r: ServiceWorkerRegistration | undefined) {
           log('on registered');
+
           if (intervalRef) {
             clearInterval(intervalRef);
             intervalRef = null;

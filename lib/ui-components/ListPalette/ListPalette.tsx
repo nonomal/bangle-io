@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
+import type { PaletteOnExecuteItem } from '../UniversalPalette';
 import { UniversalPalette } from '../UniversalPalette';
-import { ItemType } from '../UniversalPalette/PaletteItem';
+import type { ItemType } from '../UniversalPalette/PaletteItem';
 
 export function ListPalette({
   placeholder,
@@ -29,6 +30,7 @@ export function ListPalette({
     if (typeof obj.title === 'string') {
       return strMatch(obj.title, inputValue);
     }
+
     return false;
   });
   const inputRef = useRef<HTMLInputElement>(null);
@@ -49,7 +51,7 @@ export function ListPalette({
     description: error.displayMessage || error.message,
   };
 
-  const onExecuteItem = useCallback(
+  const onExecuteItem = useCallback<PaletteOnExecuteItem>(
     async (getUid) => {
       const uid = getUid(items);
       onSelectItem(items.find((item) => item.uid === uid));
@@ -91,9 +93,7 @@ export function ListPalette({
             item={errorItem}
             isActive={false}
             onClick={() => {}}
-            style={{
-              backgroundColor: 'var(--error-bgColor)',
-            }}
+            className="bg-colorCriticalSolidFaint"
           />
         )}
         {items.map((item, i) => (
@@ -112,10 +112,12 @@ export function ListPalette({
 
 function strMatch(a: string[] | string, b: string): boolean {
   b = b.toLocaleLowerCase();
+
   if (Array.isArray(a)) {
     return a.filter(Boolean).some((str) => strMatch(str, b));
   }
 
   a = a.toLocaleLowerCase();
+
   return a.includes(b) || b.includes(a);
 }

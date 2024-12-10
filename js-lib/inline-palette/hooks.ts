@@ -13,7 +13,6 @@ import { getSuggestTooltipKey } from './inline-palette';
 
 export function useInlinePaletteQuery(inlinePaletteKey: PluginKey) {
   const view = useEditorViewContext();
-  // TODO show is a bad name
   const {
     triggerText: query,
     counter,
@@ -42,7 +41,7 @@ export function useInlinePaletteItems<T extends InlinePaletteItem>(
     index: number,
   ) => {
     isActive: boolean;
-    onClick: (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => void;
+    onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
   };
   dismissPalette: () => boolean;
 } {
@@ -100,9 +99,11 @@ export function useInlinePaletteItems<T extends InlinePaletteItem>(
           dispatch,
           view,
         );
+
         return result;
       },
     );
+
     return () => {
       setExecuteItemCommand(undefined);
     };
@@ -112,7 +113,7 @@ export function useInlinePaletteItems<T extends InlinePaletteItem>(
     (item: T, index: number) => {
       return {
         isActive: activeIndex === index,
-        onClick: (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
+        onClick: (e: React.MouseEvent<HTMLDivElement>) => {
           if (executeHandler(index)(view.state, view.dispatch, view)) {
             e.preventDefault();
           }
@@ -130,6 +131,7 @@ export function useInlinePaletteItems<T extends InlinePaletteItem>(
 
 function getActiveIndex(counter: number, size: number): number {
   const r = counter % size;
+
   return r < 0 ? r + size : r;
 }
 

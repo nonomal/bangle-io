@@ -1,6 +1,7 @@
 import React from 'react';
 
-import { EditorState, EditorView, NodeSelection } from '@bangle.dev/pm';
+import type { EditorState, EditorView } from '@bangle.dev/pm';
+import { NodeSelection } from '@bangle.dev/pm';
 import { useEditorViewContext } from '@bangle.dev/react';
 import {
   FloatingMenu,
@@ -56,6 +57,7 @@ function ScaleButton({
 
 export function ImageEditorReactComponent() {
   const view = useEditorViewContext();
+
   return (
     <>
       <FloatingMenu
@@ -63,6 +65,7 @@ export function ImageEditorReactComponent() {
         renderMenuType={({ type }) => {
           if (type === 'imageMenu') {
             const currentScaleFactor = getSelectedImageNodeScale(view.state);
+
             return (
               <Menu>
                 <MenuGroup>
@@ -110,6 +113,7 @@ const updateImageNodeAttribute =
       return false;
     }
     const { node } = state.selection;
+
     if (node.type !== state.schema.nodes.image) {
       return false;
     }
@@ -123,6 +127,7 @@ const updateImageNodeAttribute =
         }),
       );
     }
+
     return true;
   };
 
@@ -131,9 +136,11 @@ function getSelectedImageNodeScale(state: EditorState) {
     return undefined;
   }
   const { node } = state.selection;
+
   if (node.type !== state.schema.nodes.image) {
     return undefined;
   }
   const { alt } = node.attrs ?? {};
+
   return getImageAltScaleFactor(alt);
 }

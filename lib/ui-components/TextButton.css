@@ -1,7 +1,0 @@
-.text-button {
-  background-color: var(--accent-secondary);
-}
-
-.text-button:hover {
-  background-color: var(--accent-primary-1);
-}

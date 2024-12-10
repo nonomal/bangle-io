@@ -2,21 +2,21 @@ import React, { useCallback, useImperativeHandle, useMemo } from 'react';
 
 import { Selection } from '@bangle.dev/pm';
 
+import { nsmApi2 } from '@bangle.io/api';
 import { CorePalette } from '@bangle.io/constants';
-import { useEditorManagerContext } from '@bangle.io/slice-editor-manager';
+import type { PaletteOnExecuteItem } from '@bangle.io/ui-components';
 import { NullIcon, UniversalPalette } from '@bangle.io/ui-components';
 import { safeRequestAnimationFrame } from '@bangle.io/utils';
 
-import { ExtensionPaletteType } from './config';
+import type { ExtensionPaletteType } from './config';
 
 const identifierPrefix = '#';
 
 const HeadingPalette: ExtensionPaletteType['ReactComponent'] = React.forwardRef(
   ({ query, onSelect, getActivePaletteItem }, ref) => {
-    const editorContext = useEditorManagerContext();
-
     const items = useMemo(() => {
-      const { primaryEditor } = editorContext;
+      const { primaryEditor } = nsmApi2.editor.editorState();
+
       if (!primaryEditor || primaryEditor.destroyed) {
         return [];
       }
@@ -46,6 +46,7 @@ const HeadingPalette: ExtensionPaletteType['ReactComponent'] = React.forwardRef(
           ) {
             return r.level === parseInt(query);
           }
+
           return strMatch(r.title + ' ' + r.level, query);
         })
         .map((r, i) => {
@@ -56,14 +57,15 @@ const HeadingPalette: ExtensionPaletteType['ReactComponent'] = React.forwardRef(
             data: r,
           };
         });
-    }, [query, editorContext]);
+    }, [query]);
 
-    const onExecuteItem = useCallback(
+    const onExecuteItem = useCallback<PaletteOnExecuteItem>(
       (getUid, sourceInfo) => {
-        const { primaryEditor } = editorContext;
+        const { primaryEditor } = nsmApi2.editor.editorState();
 
         const uid = getUid(items);
         const item = items.find((item) => item.uid === uid);
+
         if (item) {
           // Using this to wait for editor to get focused
           safeRequestAnimationFrame(() => {
@@ -81,7 +83,7 @@ const HeadingPalette: ExtensionPaletteType['ReactComponent'] = React.forwardRef(
           });
         }
       },
-      [editorContext, items],
+      [items],
     );
 
     // Expose onExecuteItem for the parent to call it
@@ -128,11 +130,13 @@ const HeadingPalette: ExtensionPaletteType['ReactComponent'] = React.forwardRef(
 
 function strMatch(a: string[] | string, b: string): boolean {
   b = b.toLocaleLowerCase();
+
   if (Array.isArray(a)) {
     return a.filter(Boolean).some((str) => strMatch(str, b));
   }
 
   a = a.toLocaleLowerCase();
+
   return a.includes(b) || b.includes(a);
 }
 
@@ -145,6 +149,7 @@ export const headingPalette: ExtensionPaletteType = {
     if (identifierPrefix && rawQuery.startsWith(identifierPrefix)) {
       return rawQuery.slice(1);
     }
+
     return null;
   },
   ReactComponent: HeadingPalette,

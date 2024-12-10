@@ -1,37 +1,32 @@
+import { Extension, nsmApi2 } from '@bangle.io/api';
+import {
+  CORE_OPERATIONS_OPEN_GITHUB_ISSUE,
+  SEVERITY,
+} from '@bangle.io/constants';
 import {
   BaseFileSystemError,
   NATIVE_BROWSER_PERMISSION_ERROR,
   NATIVE_BROWSER_USER_ABORTED_ERROR,
   NativeBrowserFileSystemError,
-} from '@bangle.io/baby-fs';
-import { Extension } from '@bangle.io/extension-registry';
-import { showNotification } from '@bangle.io/slice-notification';
-import {
-  goToWorkspaceAuthRoute,
-  workspaceSliceKey,
-} from '@bangle.io/slice-workspace';
-
-import { NativsFsStorageProvider } from './nativefs-storage-provider';
+  NativeFsStorageProvider,
+} from '@bangle.io/storage';
 
 const extensionName = '@bangle.io/browser-nativefs-storage';
 
 const extension = Extension.create({
   name: extensionName,
   application: {
-    slices: [],
-    storageProvider: new NativsFsStorageProvider(),
-    onStorageError: (error, store) => {
+    storageProvider: new NativeFsStorageProvider(),
+    onStorageError: (error) => {
       if (
         error.code === NATIVE_BROWSER_PERMISSION_ERROR ||
         error.code === NATIVE_BROWSER_USER_ABORTED_ERROR
       ) {
-        const { wsName } = workspaceSliceKey.getSliceStateAsserted(store.state);
+        const wsName = nsmApi2.workspace.workspaceState().wsName;
 
         if (wsName) {
-          goToWorkspaceAuthRoute(wsName, error.code)(
-            store.state,
-            store.dispatch,
-          );
+          nsmApi2.workspace.goToWorkspaceAuthRoute(wsName, error.code);
+
           return true;
         }
       }
@@ -41,12 +36,21 @@ const extension = Extension.create({
         error.name === BaseFileSystemError.name
       ) {
         console.debug(error.code, error.name, error.stack);
-        showNotification({
-          severity: 'error',
+
+        nsmApi2.ui.showNotification({
+          severity: SEVERITY.ERROR,
           title: 'File system error',
           content: error.message,
           uid: 'NativefsStorageProviderError' + Math.random(),
-        })(store.state, store.dispatch);
+          buttons: [
+            {
+              title: 'Report issue',
+              hint: `Report an issue on Github`,
+              operation: CORE_OPERATIONS_OPEN_GITHUB_ISSUE,
+            },
+          ],
+        });
+
         return true;
       }
 

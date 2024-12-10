@@ -2,6 +2,7 @@ import { IndexedDBFileSystem } from '../indexed-db-fs';
 
 const toFile = (str) => {
   var file = new File([str], 'foo.txt', { type: 'text/plain' });
+
   return file;
 };
 
@@ -15,17 +16,9 @@ test('writeFile', async () => {
   const fs = new IndexedDBFileSystem();
   await fs.writeFile('hola/hi', toFile('my-data'));
 
-  expect(await fs.readFile('hola/hi')).toMatchInlineSnapshot(`
-    File {
-      "filename": "foo.txt",
-      "parts": Array [
-        "my-data",
-      ],
-      "properties": Object {
-        "type": "text/plain",
-      },
-    }
-  `);
+  await expect(
+    (await fs.readFile('hola/hi'))?.text(),
+  ).resolves.toMatchInlineSnapshot(`"my-data"`);
 
   expect(await fs.stat('hola/hi')).toEqual({
     mtimeMs: expect.any(Number),
@@ -57,7 +50,7 @@ test('stat throws error if file not found', async () => {
   await expect(
     fs.stat('hola/unknown'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `"File \\"hola/unknown\\" not found"`,
+    `"File "hola/unknown" not found"`,
   );
 });
 
@@ -68,21 +61,11 @@ test('rename', async () => {
 
   await expect(
     fs.readFile('hola/hi'),
-  ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `"File \\"hola/hi\\" not found"`,
-  );
+  ).rejects.toThrowErrorMatchingInlineSnapshot(`"File "hola/hi" not found"`);
 
-  await expect(fs.readFile('ebola/two')).resolves.toMatchInlineSnapshot(`
-          File {
-            "filename": "foo.txt",
-            "parts": Array [
-              "mydata",
-            ],
-            "properties": Object {
-              "type": "text/plain",
-            },
-          }
-        `);
+  await expect(
+    (await fs.readFile('ebola/two'))?.text(),
+  ).resolves.toMatchInlineSnapshot(`"mydata"`);
 });
 
 test('rename throws error if old file not found', async () => {
@@ -90,9 +73,7 @@ test('rename throws error if old file not found', async () => {
 
   await expect(
     fs.rename('hola/hi', 'ebola/two'),
-  ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `"File \\"hola/hi\\" not found"`,
-  );
+  ).rejects.toThrowErrorMatchingInlineSnapshot(`"File "hola/hi" not found"`);
 });
 
 test('rename throws error if new file already exists', async () => {
@@ -103,7 +84,7 @@ test('rename throws error if new file already exists', async () => {
   await expect(
     fs.rename('hola/hi', 'ebola/two'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `"Cannot rename; File \\"hola/hi\\" already exists"`,
+    `"Cannot rename; File "hola/hi" already exists"`,
   );
 });
 
@@ -113,9 +94,7 @@ test('unlink', async () => {
   await fs.unlink('hola/hi');
   await expect(
     fs.readFile('hola/hi'),
-  ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `"File \\"hola/hi\\" not found"`,
-  );
+  ).rejects.toThrowErrorMatchingInlineSnapshot(`"File "hola/hi" not found"`);
 });
 
 test('opendirRecursive root', async () => {
@@ -124,12 +103,7 @@ test('opendirRecursive root', async () => {
   await fs.writeFile('hola/hi', toFile('my-data'));
   await fs.writeFile('hola/bye', toFile('my-data'));
   const result = await fs.opendirRecursive('hola');
-  expect(result).toMatchInlineSnapshot(`
-    Array [
-      "hola/hi",
-      "hola/bye",
-    ]
-  `);
+  expect(result.sort()).toEqual(['hola/bye', 'hola/hi']);
 });
 
 test('opendirRecursive subdir', async () => {
@@ -141,22 +115,17 @@ test('opendirRecursive subdir', async () => {
   await fs.writeFile('jango/bye', toFile('my-data'));
   let result = await fs.opendirRecursive('jango/');
   expect(result).toMatchInlineSnapshot(`
-    Array [
+    [
       "jango/bye",
     ]
   `);
 
   result = await fs.opendirRecursive('hola');
-  expect(result).toMatchInlineSnapshot(`
-    Array [
-      "hola/hi",
-      "hola/bye",
-    ]
-  `);
+  expect(result.sort()).toEqual(['hola/bye', 'hola/hi']);
 
   result = await fs.opendirRecursive('holamagic');
   expect(result).toMatchInlineSnapshot(`
-    Array [
+    [
       "holamagic/bye",
     ]
   `);

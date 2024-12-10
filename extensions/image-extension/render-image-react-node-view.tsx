@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 
+import { nsmApi2 } from '@bangle.io/api';
 import type { RenderReactNodeView } from '@bangle.io/extension-registry';
-import { getFile, useWorkspaceContext } from '@bangle.io/slice-workspace';
+import type { WsPath } from '@bangle.io/shared-types';
 import { useDestroyRef } from '@bangle.io/utils';
+import type { OpenedWsPaths } from '@bangle.io/ws-path';
 import { isValidFileWsPath, parseLocalFilePath } from '@bangle.io/ws-path';
 
 import {
@@ -17,6 +19,7 @@ interface ImageNodeAttrs {
 export const renderImageReactNodeView: RenderReactNodeView = {
   image: ({ nodeViewRenderArg }) => {
     let { src, alt } = nodeViewRenderArg.node.attrs;
+
     return <ImageComponent nodeAttrs={{ src, alt }} />;
   },
 };
@@ -30,25 +33,31 @@ const isOtherSources = (src?: string) => {
   );
 };
 
-export function ImageComponent({ nodeAttrs }: { nodeAttrs: ImageNodeAttrs }) {
+export function ImageComponentInner({
+  nodeAttrs,
+  openedWsPaths,
+  readFile,
+}: {
+  nodeAttrs: ImageNodeAttrs;
+  openedWsPaths: OpenedWsPaths;
+  readFile: (wsPath: WsPath) => Promise<File | undefined>;
+}) {
   const { src: inputSrc, alt } = nodeAttrs;
   const [imageSrc, updateImageSrc] = useState<string | null>(null);
-  const {
-    openedWsPaths: { primaryWsPath },
-    bangleStore,
-  } = useWorkspaceContext();
   const imageWsPath =
-    primaryWsPath && !isOtherSources(inputSrc)
-      ? parseLocalFilePath(inputSrc, primaryWsPath)
+    openedWsPaths.primaryWsPath2 && !isOtherSources(inputSrc)
+      ? parseLocalFilePath(inputSrc, openedWsPaths.primaryWsPath2)
       : undefined;
 
   const [dim, updateDimensions] = useState(() => {
     if (imageWsPath) {
       return imageDimensionFromWsPath(imageWsPath);
     }
+
     return undefined;
   });
   let height: number | undefined, width: number | undefined;
+
   if (dim) {
     ({ height, width } = dim);
   }
@@ -57,7 +66,7 @@ export function ImageComponent({ nodeAttrs }: { nodeAttrs: ImageNodeAttrs }) {
   useEffect(() => {
     let objectUrl: string | null = null;
 
-    if (primaryWsPath) {
+    if (openedWsPaths.primaryWsPath2) {
       if (isOtherSources(inputSrc)) {
         updateImageSrc(inputSrc);
       } else {
@@ -66,16 +75,13 @@ export function ImageComponent({ nodeAttrs }: { nodeAttrs: ImageNodeAttrs }) {
         }
 
         if (imageWsPath) {
-          getFile(imageWsPath)(
-            bangleStore.state,
-            bangleStore.dispatch,
-            bangleStore,
-          )
+          readFile(imageWsPath)
             .then((file) => {
               if (!file) {
                 return;
               }
               objectUrl = window.URL.createObjectURL(file);
+
               if (!width) {
                 calcImageDimensions(objectUrl).then((dim) => {
                   if (!destroyRef.current) {
@@ -95,18 +101,28 @@ export function ImageComponent({ nodeAttrs }: { nodeAttrs: ImageNodeAttrs }) {
         }
       }
     }
+
     return () => {
       if (objectUrl) {
         window.URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [inputSrc, primaryWsPath, bangleStore, destroyRef, imageWsPath, width]);
+  }, [
+    inputSrc,
+    openedWsPaths.primaryWsPath2,
+    destroyRef,
+    readFile,
+    imageWsPath,
+    width,
+  ]);
 
   let newWidth = width;
   let newHeight = height;
+
   if (alt) {
     if (width && height && /.*scale\d.\d\d$/.test(alt)) {
       const scaled = alt.split('scale')[1];
+
       if (scaled) {
         const perc = parseFloat(scaled);
 
@@ -124,6 +140,18 @@ export function ImageComponent({ nodeAttrs }: { nodeAttrs: ImageNodeAttrs }) {
       alt={alt || inputSrc}
       width={newWidth}
       height={newHeight}
+    />
+  );
+}
+
+export function ImageComponent({ nodeAttrs }: { nodeAttrs: ImageNodeAttrs }) {
+  const { openedWsPaths } = nsmApi2.workspace.useWorkspace();
+
+  return (
+    <ImageComponentInner
+      nodeAttrs={nodeAttrs}
+      openedWsPaths={openedWsPaths}
+      readFile={nsmApi2.workspace.readFile}
     />
   );
 }

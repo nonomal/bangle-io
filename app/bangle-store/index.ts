@@ -1,6 +1,4 @@
-import { historySliceKey } from './slices/history-slice';
-
-export { bangleStateSlices } from './bangle-slices';
-export * from './bangle-store';
-export { lastWorkspaceUsed } from './slices/misc-effects-slice';
-export { historySliceKey };
+export { historySlice } from './nsm-store/history-slice';
+export { lastWorkspaceUsed } from './nsm-store/misc-effects';
+export { naukarReplicaSlicesDispatch } from './nsm-store/naukar-replica-slices-dispatch';
+export { createNsmStore } from './nsm-store/nsm-store';

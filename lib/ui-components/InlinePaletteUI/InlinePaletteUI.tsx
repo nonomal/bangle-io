@@ -25,12 +25,12 @@ export function InlinePaletteRow({
   style = {},
   disabled,
   // on touch devices having :hover forces you to click twice
-  allowHover = !isTouchDevice(),
+  allowHover = !isTouchDevice,
 }: {
   dataId: string;
   title?: string;
   isActive?: boolean;
-  onClick?: (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => void;
+  onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
   rightIcon?: JSX.Element | null;
   rightHoverIcon?: JSX.Element | null;
   leftNode?: JSX.Element | null;
@@ -70,12 +70,12 @@ export function InlinePaletteRow({
         onMouseLeave={mouseLeave}
         ref={ref}
         className={cx(
-          'flex flex-row items-center inline-palette-row',
+          'flex flex-row items-center B-ui-components_inline-palette-row',
           disabled ? 'cursor-not-allowed' : 'cursor-pointer',
           className,
-          isActive && 'active',
-          allowHover && 'hover-allowed',
-          disabled && 'disabled',
+          isActive && 'BU_active',
+          allowHover && 'BU_hover-allowed',
+          disabled && 'BU_disabled',
         )}
         style={{
           paddingLeft: depth * basePadding,
@@ -86,18 +86,18 @@ export function InlinePaletteRow({
         {leftNode}
         <span className="flex flex-col">
           <span
-            className={cx('text-base font-bold truncate select-none')}
-            style={{
-              color: disabled ? 'var(--textColor-1)' : 'inherit',
-            }}
+            className={cx(
+              'text-base font-bold truncate select-none',
+              disabled && 'text-colorNeutralTextSubdued',
+            )}
           >
             {title}
           </span>
           <span
-            className={cx('text-sm font-normal select-none')}
-            style={{
-              color: disabled ? 'var(--textColor-1)' : 'inherit',
-            }}
+            className={cx(
+              'text-sm font-normal select-none',
+              disabled && 'text-colorNeutralTextSubdued',
+            )}
           >
             {description}
           </span>

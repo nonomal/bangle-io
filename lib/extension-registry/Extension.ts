@@ -1,19 +1,25 @@
-import React from 'react';
+import type React from 'react';
 
 import type { RawSpecs } from '@bangle.dev/core';
 import type { RenderNodeViewsFunction as BangleRenderNodeViewsFunction } from '@bangle.dev/react';
 
-import { ApplicationStore, Slice } from '@bangle.io/create-store';
+import type { ApplicationStore } from '@bangle.io/create-store';
+import { Slice } from '@bangle.io/create-store';
+import type { AnySlice, EffectCreator } from '@bangle.io/nsm-3';
+import { isSlice } from '@bangle.io/nsm-3';
 import type {
+  DialogType,
   EditorWatchPluginState,
   NoteFormatProvider,
   NoteSidebarWidget,
+  NsmStore,
+  OnStorageProviderError,
   SerialOperationDefinitionType,
   SerialOperationHandler,
 } from '@bangle.io/shared-types';
 import type { BaseStorageProvider } from '@bangle.io/storage';
 
-import { EditorPluginDefinition } from './PluginType';
+import type { EditorPluginDefinition } from './PluginType';
 
 const _check = Symbol();
 
@@ -44,82 +50,78 @@ export type RegisterSerialOperationHandlerType = (
 
 export type SerialOperationHandler2<
   OpType extends SerialOperationDefinitionType,
-> = (
-  bangleStore: ApplicationStore,
-  abortSignal: AbortSignal,
-) => {
-  destroy?: () => void;
+> = () => {
   handle: (
-    serialOperation: OpType,
+    serialOperation: { name: OpType['name']; value?: any },
     payload: any,
-    store: ApplicationStore,
   ) => boolean | void;
 };
+
+export type SerialOperationHandlerNsm<
+  OpType extends SerialOperationDefinitionType,
+> = () => {
+  handle: (
+    serialOperation: { name: OpType['name']; value?: any },
+    payload: any,
+    store: NsmStore,
+  ) => boolean | void;
+};
+
 export interface ApplicationConfig<
-  T = any,
   OpType extends SerialOperationDefinitionType = any,
 > {
   name: string;
   ReactComponent?: React.ComponentType<{
     key: string;
   }>;
-  operations?: Array<OpType>;
-  sidebars?: Array<SidebarType>;
+  operations?: OpType[];
+  sidebars?: SidebarType[];
+  dialogs?: DialogType[];
   operationHandler?: SerialOperationHandler2<OpType>;
-  noteSidebarWidgets?: Array<NoteSidebarWidget>;
-  slices?: Array<Slice<any>>;
+  operationHandlerNsm?: SerialOperationHandler2<OpType>;
+  noteSidebarWidgets?: NoteSidebarWidget[];
+  slices?: Slice[];
+  nsmSlices?: AnySlice[];
+  nsmEffects?: EffectCreator[];
   storageProvider?: BaseStorageProvider;
   noteFormatProvider?: NoteFormatProvider;
-  // return true if the error was handled by your callback
+  // Return true if the error was handled by your callback
   // and false if it cannot be handled
-  onStorageError?: (
-    error: Error & { code: string },
-    store: ApplicationStore,
-  ) => boolean;
+  // Only applicable if your extension is a storage provider
+  onStorageError?: OnStorageProviderError;
+}
+
+export interface ThemeConfig {
+  name: string;
+  ownerExtension: string;
+  description?: string;
+  url: string;
 }
 
 export interface SidebarType {
   activitybarIcon: JSX.Element;
+  // if provided will be used to decide whether to show the sidebar icon in activitybar
+  // or not. If not provided, the icon will always be shown.
+  activitybarIconShow?: (wsName: string | undefined) => boolean;
   hint: string;
   name: `sidebar::${string}`;
-  ReactComponent: React.ComponentType<{}>;
+  ReactComponent: React.ComponentType;
   title: string;
 }
 
-interface Config<T, OpType extends SerialOperationDefinitionType> {
-  application: ApplicationConfig<T, OpType>;
-  editor: EditorConfig;
-  initialState?: any;
+interface Config<OpType extends SerialOperationDefinitionType> {
+  application: ApplicationConfig<OpType> | undefined;
+  editor: EditorConfig | undefined;
   name: string;
+  themes: ThemeConfig[] | undefined;
 }
 
-export class Extension<
-  T = unknown,
-  OpType extends SerialOperationDefinitionType = any,
-> {
-  name: string;
-  editor: EditorConfig;
-  initialState?: any;
-  application: ApplicationConfig<T, OpType>;
-
-  constructor(ext: Config<T, OpType>, check: typeof _check) {
-    if (check !== _check) {
-      throw new Error('Instantiate class via `Extension.create({})`');
-    }
-    this.name = ext.name;
-    this.editor = ext.editor;
-    this.initialState = ext.initialState;
-    this.application = ext.application;
-  }
-
-  static create<
-    T = undefined,
-    OpType extends SerialOperationDefinitionType = any,
-  >(config: {
+export class Extension<OpType extends SerialOperationDefinitionType = any> {
+  static create<OpType extends SerialOperationDefinitionType = any>(config: {
     name: string;
-    initialState?: T;
     editor?: Omit<EditorConfig, 'name'>;
-    application?: Omit<ApplicationConfig<T, OpType>, 'name'>;
+    application?: Omit<ApplicationConfig<OpType>, 'name'>;
+    themes?: Array<Omit<ThemeConfig, 'ownerExtension'>>;
   }) {
     const { name } = config;
 
@@ -129,13 +131,43 @@ export class Extension<
 
     if (!/^[a-z0-9-_@/\.]+$/.test(name)) {
       throw new Error(
-        'Extension name must be npm package name which can only have the follow characters "a..z" "0..9" "@" "." "-" and "_"',
+        `Extension "${name}": Extension's name can oly have the following characters "a..z" "0..9" "@" "." "-" and "_"`,
       );
     }
 
-    const editor = Object.assign({}, config.editor, { name });
-    const application = Object.assign({}, config.application, { name });
-    const initialState = config.initialState;
+    const editor: EditorConfig | undefined = config.editor
+      ? Object.assign({}, config.editor, {
+          name,
+        })
+      : undefined;
+
+    const application: ApplicationConfig<OpType> | undefined =
+      config.application
+        ? Object.assign({}, config.application, { name })
+        : undefined;
+
+    const themes: ThemeConfig[] | undefined = config.themes?.map((r) => ({
+      ...r,
+      ownerExtension: name,
+    }));
+
+    if (themes) {
+      if (new Set(themes.map((t) => t.name)).size !== themes.length) {
+        throw new Error('Theme: names must be unique');
+      }
+
+      for (const theme of themes) {
+        if (!theme.name) {
+          throw new Error('Theme: name is required');
+        }
+        if (!theme.url) {
+          throw new Error('Theme: url is required');
+        }
+        if (typeof theme.url !== 'string') {
+          throw new Error('Theme: url must be of "string" type');
+        }
+      }
+    }
 
     const {
       specs,
@@ -143,43 +175,50 @@ export class Extension<
       highPriorityPlugins,
       markdownItPlugins,
       renderReactNodeView,
-    } = editor;
+    } = editor ?? {};
 
     if (specs && !Array.isArray(specs)) {
-      throw new Error('Extension: specs must be an array');
+      throw new Error(`Extension "${name}": specs must be an array`);
     }
     if (plugins && !Array.isArray(plugins)) {
-      throw new Error('Extension: plugins must be an array');
+      throw new Error(`Extension "${name}": plugins must be an array`);
     }
     if (highPriorityPlugins && !Array.isArray(highPriorityPlugins)) {
-      throw new Error('Extension: highPriorityPlugins must be an array');
+      throw new Error(
+        `Extension "${name}": highPriorityPlugins must be an array`,
+      );
     }
     if (markdownItPlugins && !Array.isArray(markdownItPlugins)) {
-      throw new Error('Extension: markdownItPlugins must be an array');
+      throw new Error(
+        `Extension "${name}": markdownItPlugins must be an array`,
+      );
     }
     if (
       renderReactNodeView &&
       Object.values(renderReactNodeView).some((r) => typeof r !== 'function')
     ) {
       throw new Error(
-        'Extension: renderReactNodeView must be an Object<string, function> where the function returns a react element',
+        `Extension "${name}": renderReactNodeView must be an Object<string, function> where the function returns a react element`,
       );
     }
 
     const {
       operations,
       sidebars,
+      dialogs,
       noteSidebarWidgets,
       slices,
+      nsmSlices,
+      nsmEffects,
       operationHandler,
       storageProvider,
       noteFormatProvider,
       onStorageError,
-    } = application;
+    } = application ?? {};
 
     if (operationHandler && !operations) {
       throw new Error(
-        'Extension: operationHandler is required when defining operations',
+        `Extension "${name}": operationHandler is required when defining operations`,
       );
     }
 
@@ -192,18 +231,18 @@ export class Extension<
         )
       ) {
         throw new Error(
-          `An operation must have a name with the following schema operation::<extension_pkg_name:xyz. For example 'operation::@bangle.io/example:hello-world'`,
+          `Extension "${name}": An operation must have a name with the following schema operation::<extension_pkg_name:xyz. For example 'operation::@bangle.io/example:hello-world'`,
         );
       }
 
       if (operations.length !== new Set(operations.map((r) => r.name)).size) {
-        throw new Error('Operation name must be unique');
+        throw new Error(`Extension "${name}": Operation name must be unique`);
       }
     }
 
     if (sidebars) {
       if (!Array.isArray(sidebars)) {
-        throw new Error('Extension: sidebars must be an array');
+        throw new Error(`Extension "${name}": sidebars must be an array`);
       }
 
       if (
@@ -215,12 +254,13 @@ export class Extension<
           const validIcon = Boolean(s.activitybarIcon);
           const validComponent = Boolean(s.ReactComponent);
           const validHint = typeof s.hint === 'string';
+
           return (
             validName && validIcon && validIcon && validComponent && validHint
           );
         })
       ) {
-        throw new Error('Extension: Invalid sidebars config.');
+        throw new Error(`Extension "${name}": Invalid sidebars config.`);
       }
     }
 
@@ -234,8 +274,34 @@ export class Extension<
         )
       ) {
         throw new Error(
-          `Extension: invalid slice. Slice key must be prefixed with extension name followed by a semicolon (:). For example, "new SliceKey(\'slice::my-extension-name:xyz\')"`,
+          `Extension "${name}": invalid slice. Slice key must be prefixed with extension name followed by a semicolon (:). For example, "new SliceKey(\'slice::my-extension-name:xyz\')"`,
         );
+      }
+    }
+
+    if (nsmSlices) {
+      if (
+        !nsmSlices.every(
+          (slice) =>
+            isSlice(slice) &&
+            slice.name.startsWith(`slice::${pkgNameWithoutBangleIo(name)}:`),
+        )
+      ) {
+        throw new Error(
+          `Extension "${name}": invalid slice name. Must start with ${`slice::${pkgNameWithoutBangleIo(
+            name,
+          )}:`}`,
+        );
+      }
+    }
+
+    if (nsmEffects) {
+      if (
+        !nsmEffects.every(
+          (effectCreator) => typeof effectCreator === 'function',
+        )
+      ) {
+        throw new Error(`Extension "${name}": invalid slice effect.`);
       }
     }
 
@@ -250,7 +316,22 @@ export class Extension<
       })
     ) {
       throw new Error(
-        'Extension: Invalid ntoe sidebar widget name. Example: "note-sidebar-widget::my-extension-name:xyz"',
+        `Extension "${name}": Invalid note sidebar widget name. Example: "note-sidebar-widget::my-extension-name:xyz"`,
+      );
+    }
+
+    if (
+      dialogs &&
+      !dialogs.every((s) => {
+        const validName =
+          hasCorrectScheme('dialog', s.name) &&
+          hasCorrectPackageName(name, s.name);
+
+        return validName;
+      })
+    ) {
+      throw new Error(
+        `Extension "${name}" : Invalid dialog name. Example: "dialog::my-extension-name:xyz"`,
       );
     }
 
@@ -289,10 +370,22 @@ export class Extension<
       }
     }
 
-    return new Extension<T, OpType>(
-      { name, editor, application, initialState },
-      _check,
-    );
+    return new Extension<OpType>({ name, editor, application, themes }, _check);
+  }
+
+  name: string;
+  editor: Config<OpType>['editor'];
+  application: Config<OpType>['application'];
+  themes: Config<OpType>['themes'];
+
+  constructor(ext: Config<OpType>, check: typeof _check) {
+    if (check !== _check) {
+      throw new Error('Instantiate class via `Extension.create({})`');
+    }
+    this.name = ext.name;
+    this.editor = ext.editor;
+    this.application = ext.application;
+    this.themes = ext.themes;
   }
 }
 
@@ -304,6 +397,10 @@ function hasCorrectPackageName(pkgName: string, slug: string) {
   return pkgName === resolveSlug(slug).pkgName;
 }
 
+function pkgNameWithoutBangleIo(pkgName: string) {
+  return pkgName.replace('@bangle.io/', '');
+}
+
 function resolveSlug(slug: string) {
   if (slug.includes('?')) {
     throw new Error('Cannot have ? in the slug');
@@ -311,6 +408,7 @@ function resolveSlug(slug: string) {
 
   const [scheme, restString] = slug.split('::');
   const [pkgName, localSlug] = restString?.split(':') || [];
+
   return {
     scheme,
     pkgName,

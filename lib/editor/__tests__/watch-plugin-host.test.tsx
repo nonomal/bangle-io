@@ -1,5 +1,5 @@
 /**
- * @jest-environment jsdom
+ * @jest-environment @bangle.io/jsdom-env
  */
 /** @jsx psx */
 /// <reference path="../../../missing-test-types.d.ts" />
@@ -11,9 +11,9 @@ import type { EditorState, EditorView } from '@bangle.dev/pm';
 import { Plugin, PluginKey } from '@bangle.dev/pm';
 import { psx, renderTestEditor, typeText } from '@bangle.dev/test-helpers';
 
-import { initialBangleStore } from '@bangle.io/bangle-store-context';
-import { EditorDisplayType } from '@bangle.io/constants';
+import { EditorDisplayType, PRIMARY_EDITOR_INDEX } from '@bangle.io/constants';
 import type { EditorWatchPluginState } from '@bangle.io/shared-types';
+import { createBasicTestStore } from '@bangle.io/test-utils';
 
 import { watchPluginHost } from '../watch-plugin-host';
 
@@ -21,7 +21,11 @@ const specRegistry = new SpecRegistry([...defaultSpecs()]);
 
 let render: (plugin: any) => ReturnType<typeof renderTestEditor>;
 
+let abortController = new AbortController();
+let { store: initialBangleStore } = createBasicTestStore({});
 beforeEach(() => {
+  abortController = new AbortController();
+  ({ store: initialBangleStore } = createBasicTestStore({}));
   jest.useFakeTimers();
   render = (plugin) =>
     renderTestEditor({
@@ -31,11 +35,13 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  abortController.abort();
   jest.useRealTimers();
 });
 
 jest.mock('@bangle.io/utils', () => {
   const actual = jest.requireActual('@bangle.io/utils');
+
   return {
     ...actual,
     debounceFn: jest.fn((cb, opts) => {
@@ -43,6 +49,7 @@ jest.mock('@bangle.io/utils', () => {
         cb();
       });
       (fn as any).cancel = jest.fn();
+
       return fn;
     }),
   };
@@ -55,7 +62,7 @@ test('works', async () => {
         dispatchSerialOperation: jest.fn(),
         editorDisplayType: EditorDisplayType.Page,
         wsPath: 'test:my-path.md',
-        editorId: 0,
+        editorId: PRIMARY_EDITOR_INDEX,
         bangleStore: initialBangleStore,
       },
       [],
@@ -96,7 +103,7 @@ describe('plugin state assertions', () => {
             dispatchSerialOperation,
             editorDisplayType: EditorDisplayType.Page,
             wsPath: 'test:my-path.md',
-            editorId: 0,
+            editorId: PRIMARY_EDITOR_INDEX,
             bangleStore: initialBangleStore,
           },
           watchPluginStates,
@@ -140,7 +147,7 @@ describe('plugin state assertions', () => {
     expect(dispatchSerialOperation).toBeCalledTimes(1);
     expect(dispatchSerialOperation).nthCalledWith(1, {
       name: 'operation::my-op:watch',
-      value: { editorId: 0 },
+      value: { editorId: PRIMARY_EDITOR_INDEX },
     });
 
     // new updates should trigger another call
@@ -150,7 +157,7 @@ describe('plugin state assertions', () => {
     expect(dispatchSerialOperation).toBeCalledTimes(2);
     expect(dispatchSerialOperation).nthCalledWith(2, {
       name: 'operation::my-op:watch',
-      value: { editorId: 0 },
+      value: { editorId: PRIMARY_EDITOR_INDEX },
     });
   });
 
@@ -183,6 +190,7 @@ describe('plugin state assertions', () => {
               if (stopPlugin2StateUpdates) {
                 return pluginState;
               }
+
               return { counter: pluginState.counter + 1 };
             },
           },
@@ -207,11 +215,11 @@ describe('plugin state assertions', () => {
     expect(dispatchSerialOperation).toBeCalledTimes(2);
     expect(dispatchSerialOperation).nthCalledWith(1, {
       name: 'operation::plugin-1:watch',
-      value: { editorId: 0 },
+      value: { editorId: PRIMARY_EDITOR_INDEX },
     });
     expect(dispatchSerialOperation).nthCalledWith(2, {
       name: 'operation::plugin-2:watch',
-      value: { editorId: 0 },
+      value: { editorId: PRIMARY_EDITOR_INDEX },
     });
 
     stopPlugin2StateUpdates = true;
@@ -223,7 +231,7 @@ describe('plugin state assertions', () => {
     expect(dispatchSerialOperation).toBeCalledTimes(3);
     expect(dispatchSerialOperation).nthCalledWith(3, {
       name: 'operation::plugin-1:watch',
-      value: { editorId: 0 },
+      value: { editorId: PRIMARY_EDITOR_INDEX },
     });
   });
 });

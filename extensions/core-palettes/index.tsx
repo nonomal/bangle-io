@@ -1,13 +1,12 @@
-import { isFirefox, isMac } from '@bangle.io/config';
+import { nsmApi2 } from '@bangle.io/api';
+import type { CorePalette } from '@bangle.io/constants';
 import {
   CORE_PALETTES_TOGGLE_NOTES_PALETTE,
   CORE_PALETTES_TOGGLE_OPERATION_PALETTE,
   CORE_PALETTES_TOGGLE_WORKSPACE_PALETTE,
-  CorePalette,
 } from '@bangle.io/constants';
-import { AppState } from '@bangle.io/create-store';
 import { Extension } from '@bangle.io/extension-registry';
-import { uiSliceKey } from '@bangle.io/slice-ui';
+import { isFirefox, isMac } from '@bangle.io/utils';
 
 import { extensionName } from './config';
 import { notesPalette } from './NotesPalette';
@@ -43,41 +42,30 @@ const extension = Extension.create({
     ReactComponent: PaletteManager,
 
     operationHandler() {
-      const getType = (state: AppState, type: CorePalette) => {
-        const uiState = uiSliceKey.getSliceState(state);
-        return uiState?.paletteType === type ? null : type;
+      const getType = (type: CorePalette) => {
+        const uiState = nsmApi2.ui.uiState();
+
+        return uiState?.paletteType === type ? undefined : type;
       };
 
       return {
-        handle(operation, _, bangleStore) {
+        handle(operation) {
           switch (operation.name) {
             case CORE_PALETTES_TOGGLE_OPERATION_PALETTE: {
-              bangleStore.dispatch({
-                name: 'action::@bangle.io/slice-ui:UPDATE_PALETTE',
-                value: {
-                  type: getType(bangleStore.state, operationPalette.type),
-                },
-              });
+              nsmApi2.ui.updatePalette(getType(operationPalette.type));
+
               return true;
             }
 
             case CORE_PALETTES_TOGGLE_WORKSPACE_PALETTE: {
-              bangleStore.dispatch({
-                name: 'action::@bangle.io/slice-ui:UPDATE_PALETTE',
-                value: {
-                  type: getType(bangleStore.state, workspacePalette.type),
-                },
-              });
+              nsmApi2.ui.updatePalette(getType(workspacePalette.type));
+
               return true;
             }
 
             case CORE_PALETTES_TOGGLE_NOTES_PALETTE: {
-              bangleStore.dispatch({
-                name: 'action::@bangle.io/slice-ui:UPDATE_PALETTE',
-                value: {
-                  type: getType(bangleStore.state, notesPalette.type),
-                },
-              });
+              nsmApi2.ui.updatePalette(getType(notesPalette.type));
+
               return true;
             }
             default: {

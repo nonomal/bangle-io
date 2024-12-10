@@ -1,5 +1,5 @@
-import { CorePalette } from '@bangle.io/constants';
-import { UniversalPalette } from '@bangle.io/ui-components';
+import type { CorePalette } from '@bangle.io/constants';
+import type { UniversalPalette } from '@bangle.io/ui-components';
 
 export const extensionName = '@bangle.io/core-palettes';
 
@@ -7,7 +7,7 @@ export interface PaletteManagerReactComponentProps {
   query: string;
   paletteType?: string | null;
   paletteMetadata: any;
-  updatePalette: (type: CorePalette | null, initialQuery?: string) => void;
+  updatePalette: (type: CorePalette | undefined, initialQuery?: string) => void;
   dismissPalette: (focusEditor?: boolean) => void;
   onSelect: ReturnType<typeof UniversalPalette.usePaletteDriver>['onSelect'];
   counter: number;

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 
-import { ItemType } from './PaletteItem';
+import type { ItemType } from './PaletteItem';
 
 export function useActivePaletteItem(items: ItemType[], counter: number) {
   return useMemo(() => {
@@ -11,7 +11,12 @@ export function useActivePaletteItem(items: ItemType[], counter: number) {
 export type PaletteOnExecuteItem = (
   cb: (items: ItemType[]) => string | undefined,
   info: { source: string; metaKey: boolean; shiftKey: boolean },
-) => void;
+) =>
+  | void
+  | Promise<void>
+  | {
+      shouldPreventFocus?: boolean;
+    };
 
 export function usePaletteDriver(
   onEscape: () => void,
@@ -31,7 +36,7 @@ export function usePaletteDriver(
     (
       event:
         | React.KeyboardEvent<HTMLInputElement>
-        | React.MouseEvent<HTMLDivElement, MouseEvent>,
+        | React.MouseEvent<HTMLDivElement>,
     ) => {
       event.preventDefault();
       event.stopPropagation();
@@ -46,7 +51,7 @@ export function usePaletteDriver(
         }
       }
 
-      const uid = event.currentTarget?.getAttribute('data-id');
+      const uid = event.currentTarget.getAttribute('data-id');
       onExecuteItem(
         uid
           ? () => uid
@@ -92,6 +97,7 @@ export function usePaletteDriver(
   const inputProps = useMemo(() => {
     return { onSpecialKey, specialKeys };
   }, [onSpecialKey, specialKeys]);
+
   return {
     inputProps,
     counter,
@@ -103,5 +109,6 @@ export function usePaletteDriver(
 
 export function getActiveIndex(counter: number, size: number) {
   const r = counter % size;
+
   return r < 0 ? r + size : r;
 }

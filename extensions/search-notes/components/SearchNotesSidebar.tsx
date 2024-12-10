@@ -1,46 +1,68 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
-import { useBangleStoreContext } from '@bangle.io/bangle-store-context';
-import { toggleWorkspacePalette } from '@bangle.io/shared-operations';
-import { useWorkspaceContext } from '@bangle.io/slice-workspace';
+import { nsmApi2, useNsmSlice } from '@bangle.io/api';
+import { CorePalette } from '@bangle.io/constants';
 import { ButtonIcon, Sidebar, SpinnerIcon } from '@bangle.io/ui-components';
+import { useDebouncedValue } from '@bangle.io/utils';
 
-import { useHighlightEditors, useSearchNotesState } from '../hooks';
+import { searchSlice, updateSearchQuery } from '../search-notes-slice';
 import { SearchInput } from './SearchInput';
 import { SearchResults } from './SearchResults';
 
 export function SearchNotesSidebar() {
+  const { wsName } = nsmApi2.workspace.useWorkspace();
+
   const [
-    { pendingSearch, searchResults, searchQuery },
-    updateSearchNotesState,
-  ] = useSearchNotesState();
-  const { wsName } = useWorkspaceContext();
+    {
+      pendingSearch,
+      searchResults,
+      searchQuery,
+      externalInputChange: externalChange,
+    },
+    searchDispatch,
+  ] = useNsmSlice(searchSlice);
+
   const [collapseAllCounter, updateCollapseAllCounter] = useState(0);
-  const bangleStore = useBangleStoreContext();
+
+  const [rawSearchQuery, updateRawSearchQuery] = useState(searchQuery || '');
+
+  const [lastExternalChange, setLastExternalChange] = useState(externalChange);
+
+  const localSearchQuery = useDebouncedValue(rawSearchQuery, {
+    wait: 30,
+  });
+
+  useEffect(() => {
+    // reset the current input state if there was an external
+    // change made to the search query
+    if (lastExternalChange !== externalChange) {
+      setLastExternalChange(externalChange);
+      updateRawSearchQuery(searchQuery);
+    } else {
+      if (localSearchQuery !== searchQuery) {
+        // else sync the local state with the global state
+        searchDispatch(updateSearchQuery({ query: localSearchQuery }));
+      }
+    }
+  }, [
+    externalChange,
+    searchQuery,
+    localSearchQuery,
+    lastExternalChange,
+    searchDispatch,
+  ]);
+
   useEffect(() => {
     updateCollapseAllCounter(0);
-  }, [searchQuery, wsName]);
-
-  const updateSearchQuery = useCallback(
-    (query) => {
-      updateSearchNotesState((state) => ({
-        ...state,
-        searchQuery: query,
-      }));
-    },
-    [updateSearchNotesState],
-  );
-
-  useHighlightEditors();
+  }, [localSearchQuery, wsName]);
 
   if (!wsName) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <span
-          className="text-sm font-extrabold cursor-pointer"
-          style={{ color: 'var(--textColor-1)' }}
+          className="text-sm font-extrabold cursor-pointer text-colorNeutralTextSubdued"
           onClick={() => {
-            toggleWorkspacePalette()(bangleStore.state, bangleStore.dispatch);
+            nsmApi2.ui.togglePalette(CorePalette.Workspace);
           }}
         >
           Please open a workspace to search
@@ -50,11 +72,11 @@ export function SearchNotesSidebar() {
   }
 
   return (
-    <Sidebar.Container className="search-notes">
+    <Sidebar.Container className="B-search-notes_search-notes">
       <Sidebar.ItemContainer className="px-2 mt-2">
         <SearchInput
-          searchQuery={searchQuery}
-          updateSearchQuery={updateSearchQuery}
+          searchQuery={rawSearchQuery}
+          updateSearchQuery={updateRawSearchQuery}
         />
       </Sidebar.ItemContainer>
       <Sidebar.ItemContainer className="flex flex-row justify-between px-2 my-1 text-xs">

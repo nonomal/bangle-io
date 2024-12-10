@@ -1,4 +1,5 @@
-import { BaseRawMarkSpec, PluginKey, SpecRegistry } from '@bangle.dev/core';
+import type { BaseRawMarkSpec, SpecRegistry } from '@bangle.dev/core';
+import { PluginKey } from '@bangle.dev/core';
 import type {
   Command,
   EditorState,
@@ -6,14 +7,24 @@ import type {
   Fragment,
   Node,
 } from '@bangle.dev/pm';
-import {
-  createTooltipDOM,
-  suggestTooltip,
-  SuggestTooltipRenderOpts,
-} from '@bangle.dev/tooltip';
+import type { SuggestTooltipRenderOpts } from '@bangle.dev/tooltip';
+import { createTooltipDOM, suggestTooltip } from '@bangle.dev/tooltip';
 import { bangleWarn, valuePlugin } from '@bangle.dev/utils';
 
-import { safeRequestAnimationFrame } from '@bangle.io/utils';
+let lastTime = 0;
+const safeRequestAnimationFrame =
+  typeof window !== 'undefined' && window.requestAnimationFrame
+    ? window.requestAnimationFrame
+    : function (callback: (r: number) => void) {
+        var currTime = new Date().getTime();
+        var timeToCall = Math.max(0, 16 - (currTime - lastTime));
+        var id = window.setTimeout(function () {
+          callback(currTime + timeToCall);
+        }, timeToCall);
+        lastTime = currTime + timeToCall;
+
+        return id;
+      };
 
 const {
   decrementSuggestTooltipCounter,
@@ -85,6 +96,7 @@ function pluginsFactory({
         safeRequestAnimationFrame(() => {
           view?.focus();
         });
+
         if (key === 'UP' ? !getIsTop() : getIsTop()) {
           return decrementSuggestTooltipCounter(suggestTooltipKey)(
             state,
@@ -102,6 +114,7 @@ function pluginsFactory({
     };
 
     let executeItemCommand: Command | undefined;
+
     return [
       valuePlugin(key, {
         // We are setting this callback which returns us the
@@ -159,6 +172,7 @@ export function replaceSuggestionMarkWith(
     view: EditorView | undefined,
   ) => {
     const suggestTooltipKey = getSuggestTooltipKey(key)(state);
+
     return suggestTooltip.replaceSuggestMarkWith(
       suggestTooltipKey,
       replaceWith,
@@ -169,6 +183,7 @@ export function replaceSuggestionMarkWith(
 export function queryInlinePaletteActive(key: PluginKey) {
   return (state: EditorState) => {
     const suggestTooltipKey = getSuggestTooltipKey(key)(state);
+
     return queryIsSuggestTooltipActive(suggestTooltipKey)(state);
   };
 }
@@ -176,6 +191,7 @@ export function queryInlinePaletteActive(key: PluginKey) {
 export function queryInlinePaletteText(key: PluginKey) {
   return (state: EditorState) => {
     const suggestTooltipKey = getSuggestTooltipKey(key)(state);
+
     return suggestTooltip.queryTriggerText(suggestTooltipKey)(state);
   };
 }

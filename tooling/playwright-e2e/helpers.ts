@@ -1,6 +1,14 @@
-import { expect, Locator, Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
+import { expect } from '@playwright/test';
 import os from 'os';
 import prettier from 'prettier';
+
+import {
+  PRIMARY_EDITOR_INDEX,
+  SECONDARY_EDITOR_INDEX,
+  WorkspaceType,
+} from '@bangle.io/constants';
+import type { EditorIdType, WsPath } from '@bangle.io/shared-types';
 
 import { filePathToWsPath, resolvePath } from './bangle-helpers';
 
@@ -32,31 +40,106 @@ export async function runOperation(page: Page, actionId: string) {
 export async function createWorkspace(page: Page, wsName = 'test' + uuid(4)) {
   await runOperation(
     page,
-    'operation::@bangle.io/core-operations:NEW_WORKSPACE',
+    'operation::@bangle.io/core-extension:NEW_WORKSPACE',
   );
 
-  await page.click('[aria-label="select storage type"]');
+  await page.click(`li[data-key="${WorkspaceType.Browser}"]`);
 
-  await page.click('[aria-label="browser storage type"]');
+  await page.click('[aria-label="Next"]');
 
   await page.fill('input[aria-label="workspace name input"]', wsName);
 
   await expect(
     page.locator(
-      '.ui-components_modal-container input[aria-label="workspace name input"]',
+      '.B-ui-components_dialog-content-container input[aria-label="workspace name input"]',
     ),
   ).toHaveValue(wsName);
 
   await Promise.all([
     page.waitForNavigation(), // The promise resolves after navigation has finished
     page.click(
-      '.ui-components_modal-container button[aria-label="create workspace"]',
+      '.B-ui-components_dialog-content-container button[aria-label="Create workspace"]',
     ),
   ]);
 
   await expect(page).toHaveURL(new RegExp('/ws/' + wsName));
 
+  await page.getByText(`📖 Workspace ${wsName}`).isVisible();
+
+  await expect(page.workers()).toHaveLength(1);
+
+  for (const worker of page.workers()) {
+    await expect
+      .poll(async () => {
+        return worker.evaluate(() => {
+          const helpers = globalThis._e2eNaukarHelpers;
+
+          return helpers?.isReady();
+        });
+      })
+      .toBe(true);
+  }
+
   return wsName;
+}
+
+/**
+ * creates multiple notes from markdown strings
+ */
+export async function createNotesFromMdString(
+  page: Page,
+  wsName: string,
+  notes: Array<[string, string]>,
+) {
+  notes.forEach(([wsPath]) => {
+    if (resolvePath(wsPath).wsName !== wsName) {
+      throw new Error(
+        `Expected wsName to be ${wsName} but got ${resolvePath(wsPath).wsName}`,
+      );
+    }
+  });
+
+  await page.evaluate(
+    async ({ notes }) => {
+      for (const note of notes) {
+        await window._nsmE2e?.nsmApi2.workspace.createNoteFromMd(
+          note[0] as WsPath,
+          note[1],
+        );
+      }
+    },
+    { notes },
+  );
+}
+
+export async function getAllWsPathsHtml(
+  page: Page,
+  opts: {
+    omitWsName?: boolean;
+  } = {},
+): Promise<Array<[string, any]>> {
+  const allPaths = (await getAllWsPaths(page))?.sort();
+
+  if (!allPaths) {
+    return [];
+  }
+
+  let result: Array<[string, string]> = [];
+
+  for (const wsPath of allPaths) {
+    await pushWsPathToPrimary(page, wsPath, { waitForEditorToLoad: true });
+    const editorLocator = await getEditorLocator(page, PRIMARY_EDITOR_INDEX);
+
+    const html = await getEditorHTML(editorLocator);
+
+    if (opts.omitWsName) {
+      result.push([resolvePath(wsPath).filePath, html]);
+    } else {
+      result.push([wsPath, html]);
+    }
+  }
+
+  return result;
 }
 
 export async function createWorkspaceFromBackup(
@@ -75,7 +158,7 @@ export async function createWorkspaceFromBackup(
     page.waitForEvent('filechooser'),
     runOperation(
       page,
-      'operation::@bangle.io/core-operations:NEW_WORKSPACE_FROM_BACKUP',
+      'operation::@bangle.io/core-extension:NEW_WORKSPACE_FROM_BACKUP',
     ),
   ]);
 
@@ -107,9 +190,11 @@ export async function getAllWsPaths(
   }
 
   const result = JSON.parse(
-    await page.evaluate(() =>
-      JSON.stringify((window as any)._e2eHelpers._getWsPaths()),
-    ),
+    await page.evaluate(() => {
+      return JSON.stringify(
+        window._nsmE2e?.nsmApi2.workspace.workspaceState().wsPaths || [],
+      );
+    }),
   );
 
   if (attempt > 3) {
@@ -118,6 +203,7 @@ export async function getAllWsPaths(
 
   if (result == null || (Array.isArray(result) && result.length < lowerBound)) {
     await longSleep();
+
     return getAllWsPaths(page, { lowerBound, attempt: attempt + 1 });
   }
 
@@ -126,36 +212,50 @@ export async function getAllWsPaths(
 
 export async function pushWsPathToPrimary(
   page: Page,
-  wsPath: string,
+  _wsPath: string,
   { waitForEditorToLoad = true } = {},
 ) {
+  const wsPath = createWsPath(_wsPath);
+
   await page.evaluate(
-    ([wsPath]) => (window as any)._e2eHelpers._pushWsPath(wsPath),
+    ([wsPath]) => {
+      if (wsPath != null) {
+        return _nsmE2e?.nsmApi2.workspace.pushPrimaryWsPath(wsPath);
+      }
+    },
     [wsPath],
   );
+
   if (waitForEditorToLoad) {
-    await waitForEditorIdToLoad(page, 0);
+    await waitForEditorIdToLoad(page, PRIMARY_EDITOR_INDEX);
   }
 }
 export async function pushWsPathToSecondary(
   page: Page,
-  wsPath: string,
+  _wsPath: string,
   { waitForEditorToLoad = true } = {},
 ) {
+  const wsPath = createWsPath(_wsPath);
+
   await page.evaluate(
-    ([wsPath]) => (window as any)._e2eHelpers._pushWsPath(wsPath, true),
+    ([wsPath]) => {
+      if (wsPath != null) {
+        return _nsmE2e?.nsmApi2.workspace.pushSecondaryWsPath(wsPath);
+      }
+    },
     [wsPath],
   );
+
   if (waitForEditorToLoad) {
-    await waitForEditorIdToLoad(page, 1);
+    await waitForEditorIdToLoad(page, SECONDARY_EDITOR_INDEX);
   }
 }
 
 export async function openWorkspacePalette(page: Page) {
   await page.keyboard.press(ctrlKey + '+p');
 
-  await page.locator('.universal-palette-container').waitFor();
-  await page.type('.universal-palette-input', 'ws:');
+  await page.locator('.B-ui-components_universal-palette-container').waitFor();
+  await page.type('.B-ui-components_universal-palette-input', 'ws:');
 
   await page
     .locator('[data-palette-type="bangle-io-core-palettes/workspace"]')
@@ -165,22 +265,29 @@ export async function openWorkspacePalette(page: Page) {
 }
 
 export async function clickPaletteRow(page: Page, id: string) {
-  await page.locator(`.universal-palette-item[data-id="${id}"]`).click();
+  await page
+    .locator(`.B-ui-components_universal-palette-item[data-id="${id}"]`)
+    .click();
 }
 
 export async function createNewNote(
   page: Page,
   wsName: string,
   noteName = 'new_file.md',
+  {
+    skipWaitForFocus = false,
+  }: {
+    skipWaitForFocus?: boolean;
+  } = {},
 ) {
-  await runOperation(page, 'operation::@bangle.io/core-operations:NEW_NOTE');
+  await runOperation(page, 'operation::@bangle.io/core-extension:NEW_NOTE');
 
   if (!noteName.endsWith('.md')) {
     noteName += '.md';
   }
 
   await page.fill(
-    '.universal-palette-container [placeholder="Enter the name of your note"]',
+    '.B-ui-components_universal-palette-container [placeholder="Enter the name of your note"]',
     noteName,
   );
 
@@ -189,7 +296,9 @@ export async function createNewNote(
     clickPaletteRow(page, 'input-confirm'),
   ]);
 
-  await waitForPrimaryEditorFocus(page);
+  if (!skipWaitForFocus) {
+    await waitForPrimaryEditorFocus(page);
+  }
 
   const wsPath = filePathToWsPath(wsName, noteName);
 
@@ -197,8 +306,8 @@ export async function createNewNote(
     throw new Error('unable to create note');
   }
 
-  // currently new notes are created in editorId==0
-  const editorId = 0;
+  // currently new notes are created in primary editor
+  const editorId = PRIMARY_EDITOR_INDEX;
 
   await waitForWsPathToLoad(page, editorId, { wsPath });
 
@@ -208,15 +317,19 @@ export async function createNewNote(
 }
 
 async function waitForPrimaryEditorFocus(page: Page) {
-  await page.isVisible('.editor-container_editor-0 .ProseMirror-focused');
+  await page.isVisible(
+    `.B-editor-container_editor-${PRIMARY_EDITOR_INDEX} .ProseMirror-focused`,
+  );
+
+  await waitForEditorFocus(page, PRIMARY_EDITOR_INDEX);
 }
 export async function waitForEditorFocus(
   page: Page,
-  editorId: number,
+  editorId: EditorIdType,
   { wsPath }: { wsPath?: string } = {},
 ) {
   await page
-    .locator(`.editor-container_editor-${editorId} .ProseMirror-focused`)
+    .locator(`.B-editor-container_editor-${editorId} .ProseMirror-focused`)
     .waitFor();
 
   if (wsPath) {
@@ -224,11 +337,15 @@ export async function waitForEditorFocus(
   }
 
   await page.isVisible(
-    `.editor-container_editor-${editorId} .ProseMirror-focused`,
+    `.B-editor-container_editor-${editorId} .ProseMirror-focused`,
   );
 }
 
-export async function clearEditor(page: Page, editorId: number, attempt = 0) {
+export async function clearEditor(
+  page: Page,
+  editorId: EditorIdType,
+  attempt = 0,
+) {
   await getEditorLocator(page, editorId, { focus: true });
   await waitForEditorFocus(page, editorId);
 
@@ -248,12 +365,15 @@ export async function clearEditor(page: Page, editorId: number, attempt = 0) {
   await sleep();
 
   text = await page
-    .locator('.editor-container_editor-0 .bangle-editor')
+    .locator(
+      `.B-editor-container_editor-${PRIMARY_EDITOR_INDEX} .bangle-editor`,
+    )
     .innerText();
 
   if (text.trim() !== '') {
     if (attempt < RECURSIVE_RETRY_MAX) {
       await clearEditor(page, editorId, attempt + 1);
+
       return;
     } else {
       throw new Error('cant clearPrimaryEditor');
@@ -265,30 +385,36 @@ export async function getPrimaryEditorHandler(
   page: Page,
   { focus = false } = {},
 ) {
-  await page.isVisible(`.editor-container_editor-0 .bangle-editor`);
+  await page.isVisible(
+    `.B-editor-container_editor-${PRIMARY_EDITOR_INDEX} .bangle-editor`,
+  );
 
-  await waitForEditorIdToLoad(page, 0);
+  await waitForEditorIdToLoad(page, PRIMARY_EDITOR_INDEX);
 
   await page.waitForFunction(() => {
-    return (window as any)._e2eHelpers._primaryEditor?.destroyed === false;
+    return window._nsmE2e?.primaryEditor?.destroyed === false;
   });
 
   if (focus) {
     await page.evaluate(async () => {
-      (window as any)._e2eHelpers._primaryEditor?.view?.focus();
+      window._nsmE2e?.primaryEditor?.view?.focus();
     });
     await waitForPrimaryEditorFocus(page);
   }
 
-  return page.$('.editor-container_editor-0 .bangle-editor');
+  return page.$(
+    `.B-editor-container_editor-${PRIMARY_EDITOR_INDEX} .bangle-editor`,
+  );
 }
 
 export async function getEditorLocator(
   page: Page,
-  editorId: number,
+  editorId: EditorIdType,
   { focus = false, wsPath }: { focus?: boolean; wsPath?: string } = {},
 ) {
-  const loc = page.locator(`.editor-container_editor-${0} .bangle-editor`);
+  const loc = page.locator(
+    `.B-editor-container_editor-${PRIMARY_EDITOR_INDEX} .bangle-editor`,
+  );
 
   await loc.waitFor();
 
@@ -301,17 +427,19 @@ export async function getEditorLocator(
   if (focus) {
     await page.evaluate(
       async ([editorId, wsPath]) => {
-        (window as any)[`editor-${editorId}`]?.editor?.view.focus();
+        _nsmE2e?.getEditorDetailsById(editorId)?.editor.view.focus();
       },
-      [editorId, wsPath],
+      [editorId, wsPath] as const,
     );
     await waitForEditorFocus(page, editorId);
   }
 
-  return page.locator(`.editor-container_editor-${editorId} .bangle-editor`);
+  return page.locator(
+    `.B-editor-container_editor-${editorId} .bangle-editor.bangle-collab-active`,
+  );
 }
 
-export function sleep(t = 20) {
+export function sleep(t = 30) {
   return new Promise((res) => setTimeout(res, t));
 }
 
@@ -321,32 +449,36 @@ export function longSleep(t = 70) {
 
 export async function getEditorDebugString(
   page: Page,
-  editorId: number,
+  editorId: EditorIdType,
   { wsPath }: { wsPath?: string } = {},
 ) {
   await getEditorLocator(page, editorId, { wsPath });
-  // TODO fix the as any
-  return page.evaluate(
-    async (editorId) =>
-      (window as any)[`editor-${editorId}`]?.editor?.view.state.doc.toString(),
-    editorId,
-  );
+
+  return page.evaluate(async (editorId) => {
+    return _nsmE2e
+      ?.getEditorDetailsById(editorId)
+      ?.editor?.view.state.doc.toString();
+  }, editorId);
 }
 
-export async function getEditorSelectionJson(page: Page, editorId: number) {
+export async function getEditorSelectionJson(
+  page: Page,
+  editorId: EditorIdType,
+) {
   return await page.evaluate(
-    async ([editorId]) =>
-      (window as any)[
-        `editor-${editorId}`
-      ]?.editor?.view.state.selection.toJSON(),
-    [editorId],
+    async ([editorId]) => {
+      return _nsmE2e
+        ?.getEditorDetailsById(editorId)
+        ?.editor?.view.state.selection.toJSON();
+    },
+    [editorId] as const,
   );
 }
 
 export async function getPrimaryEditorDebugString(el: any) {
   // TODO fix the as any
   return (el as any).evaluate(async () =>
-    (window as any)._e2eHelpers._primaryEditor?.view?.state.doc.toString(),
+    window._nsmE2e?.primaryEditor?.view?.state.doc.toString(),
   );
 }
 
@@ -365,43 +497,34 @@ function frmtHTML(doc: string) {
 
 export async function getSecondaryEditorDebugString(page: Page) {
   return (page as any).evaluate(async () =>
-    (window as any)._e2eHelpers._secondaryEditor?.view?.state.doc.toString(),
+    window._nsmE2e?.secondaryEditor?.view?.state.doc.toString(),
   );
 }
 
-// Wait until  edittor innerText contains the arg `text
+// Wait until  editor innerText contains the arg `text
 
 export async function waitForEditorTextToContain(
   page: Page,
-  editorId: number,
+  editorId: EditorIdType,
   text: string,
   attempt = 0,
-): Promise<boolean> {
-  if (
-    (
-      await page.innerText(
-        `.editor-container_editor-${editorId} .bangle-editor`,
-      )
-    ).includes(text)
-  ) {
-    return true;
-  }
+): Promise<void> {
+  let loc = page.locator(
+    `.B-editor-container_editor-${editorId} .bangle-editor.bangle-collab-active`,
+  );
 
-  if (attempt < RECURSIVE_RETRY_MAX) {
-    await sleep();
-    return waitForEditorTextToContain(page, editorId, text, attempt + 1);
-  }
-
-  throw new Error('failed waitForEditorTextToContain');
+  await expect(loc).toContainText(text, { timeout: 10000, useInnerText: true });
 }
 
 export async function getItemsInPalette(
   page: Page,
   { hasItems = false }: { hasItems?: boolean } = {},
 ) {
-  await page.locator('.universal-palette-container').waitFor();
+  await page.locator('.B-ui-components_universal-palette-container').waitFor();
 
-  const locator = page.locator('.universal-palette-item[data-id]');
+  const locator = page.locator(
+    '.B-ui-components_universal-palette-item[data-id]',
+  );
 
   if (hasItems) {
     await locator.first().waitFor();
@@ -415,6 +538,7 @@ export async function getItemsInPalette(
   // wait a little more if items are not showing up
   if (result.length === 0) {
     await longSleep();
+
     return locator.evaluateAll((nodes) =>
       [...nodes].map((n) => n.getAttribute('data-id')),
     );
@@ -424,9 +548,11 @@ export async function getItemsInPalette(
 }
 
 export async function clickItemInPalette(page: Page, dataId: string) {
-  await page.locator('.universal-palette-container').waitFor();
+  await page.locator('.B-ui-components_universal-palette-container').waitFor();
 
-  const locator = page.locator(`.universal-palette-item[data-id="${dataId}"]`);
+  const locator = page.locator(
+    `.B-ui-components_universal-palette-item[data-id="${dataId}"]`,
+  );
 
   return locator.click();
 }
@@ -437,9 +563,11 @@ export async function getWsPathsShownInFilePalette(page: Page) {
   await page.keyboard.press('p');
   await page.keyboard.up(ctrlKey);
 
-  await page.locator('.universal-palette-container').waitFor();
+  await page.locator('.B-ui-components_universal-palette-container').waitFor();
 
-  const locator = page.locator('.universal-palette-item[data-id]');
+  const locator = page.locator(
+    '.B-ui-components_universal-palette-item[data-id]',
+  );
 
   await sleep();
 
@@ -452,11 +580,12 @@ export async function getWsPathsShownInFilePalette(page: Page) {
   return wsPaths;
 }
 
-export async function getEditorJSON(page: Page, editorId: number) {
+export async function getEditorJSON(page: Page, editorId: EditorIdType) {
   await getEditorLocator(page, editorId);
+
   return page.evaluate(
-    async (editorId: number) =>
-      (window as any)[`editor-${editorId}`]?.editor.view.state.doc.toJSON(),
+    async (editorId: EditorIdType) =>
+      _nsmE2e?.getEditorDetailsById(editorId)?.editor.view.state.doc.toJSON(),
     editorId,
   );
 }
@@ -468,44 +597,126 @@ export async function splitScreen(page: Page) {
   ]);
 }
 
-export async function isIntersectingViewport(loc: Locator) {
-  return loc.evaluate(async (element) => {
-    const visibleRatio: number = await new Promise((resolve) => {
-      const observer = new IntersectionObserver((entries: any[]) => {
-        resolve(entries[0].intersectionRatio);
-        observer.disconnect();
-      });
-      observer.observe(element);
-      // Firefox doesn't call IntersectionObserver callback unless
-      // there are rafs.
-      requestAnimationFrame(() => {});
-    });
-    return visibleRatio > 0;
-  });
-}
-
 export async function waitForWsPathToLoad(
   page: Page,
-  editorId: number,
+  editorId: EditorIdType,
   { wsPath }: { wsPath: string },
 ) {
-  return page.waitForFunction(
-    ({ editorId, wsPath }) => {
-      return (window as any)[`editor-${editorId}`]?.wsPath === wsPath;
-    },
-    { editorId, wsPath },
-  );
+  await Promise.all([
+    page.waitForFunction(
+      ({ editorId, wsPath }) => {
+        return _nsmE2e?.getEditorDetailsById(editorId)?.wsPath === wsPath;
+      },
+      { editorId, wsPath },
+    ),
+    waitForEditorIdToLoad(page, editorId),
+  ]);
 }
 
-export async function waitForEditorIdToLoad(page: Page, editorId: number) {
-  return page.waitForFunction(
+export async function waitForEditorIdToLoad(
+  page: Page,
+  editorId: EditorIdType,
+) {
+  await page.waitForFunction(
     ({ editorId }) => {
-      return (window as any)[`editor-${editorId}`]?.editor?.destroyed === false;
+      try {
+        return (
+          _nsmE2e?.getEditorDetailsById(editorId)?.editor?.destroyed === false
+        );
+      } catch (error) {
+        if (
+          // we wrap an editor in a revocable proxy, when an editor is unmounted
+          // and a new editor hasn't been mounted yet, accessing the window.editor will throw an error
+          // since the proxy was revoked.
+          error instanceof Error &&
+          error.message.includes('on a proxy that has been revoked')
+        ) {
+          return false;
+        }
+        throw error;
+      }
     },
     { editorId },
   );
+
+  await page
+    .locator(
+      `.B-editor-container_editor-container-${editorId} .bangle-collab-active`,
+    )
+    .waitFor();
 }
 
 export async function waitForNotification(page: Page, text: string) {
-  await page.locator(`text=${text}`).waitFor();
+  await page
+    .locator(`[data-testid="app-entry_notification"]`)
+    .filter({
+      hasText: text,
+    })
+    .waitFor();
+}
+
+// Enables editing in a mobile UI
+export async function mobileEnableEditing(page: Page) {
+  let activityBar = page.locator('.B-ui-dhancha_activitybar');
+  let doneEditing = activityBar.locator('role=button[name="done editing"]');
+
+  if (
+    await doneEditing.isVisible({
+      timeout: 20,
+    })
+  ) {
+    expect(await isEditorEditable(page, PRIMARY_EDITOR_INDEX)).toBe(true);
+
+    return;
+  }
+
+  await activityBar.waitFor();
+
+  const edit = activityBar.locator('role=button[name="edit"]');
+  await edit.click();
+  await activityBar.locator('role=button[name="done editing"]').waitFor();
+
+  expect(await isEditorEditable(page, PRIMARY_EDITOR_INDEX)).toBe(true);
+}
+
+export async function isEditorEditable(page: Page, editorId: EditorIdType) {
+  let editor = await getEditorLocator(page, editorId);
+
+  return (await editor.getAttribute('contenteditable')) === 'true';
+}
+
+export function testIdSelector(testId: string) {
+  return `[data-testid="${testId}"]`;
+}
+
+export function getTestIdLocator(testId: string, page: Page): Locator {
+  return page.locator(testIdSelector(testId));
+}
+
+// cant use the original createWsPath because of dep issues
+export function createWsPath(wsPath: string): WsPath {
+  if (wsPath.split('/').some((r) => r.length === 0)) {
+    throw new Error('Invalid path ' + wsPath);
+  }
+
+  const [wsName, filePath, ...others] = wsPath.split(':');
+
+  if (others.length > 0) {
+    throw new Error('Invalid path ' + wsPath);
+  }
+
+  if (!wsName || !filePath) {
+    throw new Error('Invalid path ' + wsPath);
+  }
+
+  return wsPath as WsPath;
+}
+
+export function assertNotUndefined(
+  value: unknown,
+  message: string,
+): asserts value {
+  if (value === undefined) {
+    throw new Error(`assertion failed: ${message}`);
+  }
 }

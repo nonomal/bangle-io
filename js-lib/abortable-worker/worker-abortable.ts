@@ -1,8 +1,6 @@
-import { AbortControllers } from './util';
-import {
-  AbortableFunc,
-  workerAbortableMethodWrapper,
-} from './worker-abortable-function-wrapper';
+import type { AbortControllers } from './util';
+import type { AbortableFunc } from './worker-abortable-function-wrapper';
+import { workerAbortableMethodWrapper } from './worker-abortable-function-wrapper';
 
 type Callback<T> = ({
   abortWrapper,
@@ -16,7 +14,9 @@ type Callback<T> = ({
   ) => AbortableFunc<R, X>;
 }) => T;
 
-export function workerAbortable<T>(cb: Callback<T>) {
+export function workerAbortable<T extends { [key: string]: any }>(
+  cb: Callback<T>,
+) {
   let abortControllers: AbortControllers = new Map();
 
   return workerAbortHandler(
@@ -33,8 +33,9 @@ export function workerAbortHandler<T extends { [key: string]: any }>(
 ) {
   return {
     ...workerMethods,
-    __signalWorkerToAbort: (uniqueAbortId: string) => {
+    __signalWorkerToAbortMethod: async (uniqueAbortId: string) => {
       const abort = abortControllers.get(uniqueAbortId);
+
       if (abort) {
         console.debug('aborted' + uniqueAbortId);
         abort.abort();

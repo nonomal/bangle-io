@@ -1,9 +1,9 @@
 import React from 'react';
 
-import { keyDisplayValue } from '@bangle.io/config';
+import { nsmApi2 } from '@bangle.io/api';
 import { Extension } from '@bangle.io/extension-registry';
-import { changeSidebar } from '@bangle.io/slice-ui';
 import { FolderIcon } from '@bangle.io/ui-components';
+import { keyDisplayValue } from '@bangle.io/utils';
 
 import { NoteBrowserSidebar } from './NoteBrowserSidebar';
 
@@ -16,14 +16,24 @@ const extension = Extension.create({
     operations: [
       {
         name: 'operation::@bangle.io/note-browser:toggle-note-browser',
-        title: 'Toggle Notes Browser',
+        title: 'Show/Hide Notes Browser',
         keybinding: key,
+        keywords: [
+          'hide',
+          'note browser',
+          'note sidebar',
+          'notes sidebar',
+          'all notes',
+          'file',
+          'files',
+          'explorer',
+        ],
       },
     ],
     sidebars: [
       {
         name: 'sidebar::@bangle.io/note-browser:note-browser',
-        title: '🗒 Notes browser',
+        title: 'Note browser',
         hint: `Note browser\n` + keyDisplayValue(key),
         activitybarIcon: React.createElement(FolderIcon, {}),
         ReactComponent: NoteBrowserSidebar,
@@ -31,13 +41,13 @@ const extension = Extension.create({
     ],
     operationHandler() {
       return {
-        handle(operation, _, bangleStore) {
+        handle(operation) {
           switch (operation.name) {
             case 'operation::@bangle.io/note-browser:toggle-note-browser': {
-              changeSidebar('sidebar::@bangle.io/note-browser:note-browser')(
-                bangleStore.state,
-                bangleStore.dispatch,
+              nsmApi2.ui.toggleSideBar(
+                'sidebar::@bangle.io/note-browser:note-browser',
               );
+
               return true;
             }
             default: {

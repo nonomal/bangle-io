@@ -23,23 +23,24 @@ export interface BaseAction extends BaseBaseAction {}
 // A - action
 // SL - Slice's state
 // S - AppState
-export interface SliceStateField<SL, A extends BaseAction, S> {
-  init(
-    this: Slice<SL, A, S>,
-    config: { [key: string]: any },
-    appState: AppState<S, A>,
-  ): SL;
-  apply?(
+export interface SliceStateField<
+  SL,
+  A extends BaseAction,
+  S,
+  C extends { [key: string]: any } = any,
+> {
+  init: (this: Slice<SL, A, S>, config: C, appState: AppState<S, A>) => SL;
+  apply?: (
     this: Slice<SL, A, S>,
     action: A,
     value: SL,
     appState: AppState<S, A>,
-  ): SL;
+  ) => SL;
 
   stateToJSON?: (this: Slice<SL, A, S>, value: SL) => JsonValue;
   stateFromJSON?: (
     this: Slice<SL, A, S>,
-    config: { [key: string]: any },
+    config: C,
     value: JsonValue,
     appState: AppState<S, A>,
   ) => SL;
@@ -93,7 +94,7 @@ export class Slice<
 
   constructor(
     public spec: {
-      key?: SliceKey<SL, A, S>;
+      key?: SliceKey<SL, A, S, C>;
       state?: SliceStateField<SL, A, S>;
       appendAction?: (
         actions: A[],
@@ -101,7 +102,7 @@ export class Slice<
       ) => BaseAction | undefined;
       // false if it cannot be serialized
       actions?: ActionsSerializersType<A>;
-      sideEffect?: SliceSideEffect<SL, A, C> | SliceSideEffect<SL, A, C>[];
+      sideEffect?: SliceSideEffect<SL, A, C> | Array<SliceSideEffect<SL, A, C>>;
       onError?: OnErrorType<SL, A>;
     },
   ) {
@@ -139,3 +140,8 @@ export type ActionsSerializersType<A extends BaseAction> = {
 };
 
 export type ExtractAction<A, R> = Extract<A, { name: R }>;
+
+export type ExtractActionValue<
+  A extends { name: any; value: any },
+  R,
+> = ExtractAction<A, R>['value'];

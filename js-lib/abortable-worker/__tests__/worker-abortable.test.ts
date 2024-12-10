@@ -61,10 +61,16 @@ describe('workerAbortable', () => {
         let timer = setTimeout(() => {
           res();
         }, 500);
-        signal.addEventListener('abort', () => {
-          clearInterval(timer);
-          rej(new DOMException('Aborted', 'AbortError'));
-        });
+        signal.addEventListener(
+          'abort',
+          () => {
+            clearInterval(timer);
+            rej(new DOMException('Aborted', 'AbortError'));
+          },
+          {
+            once: true,
+          },
+        );
       });
     });
     let methods = workerAbortable(({ abortWrapper }) => {
@@ -76,7 +82,7 @@ describe('workerAbortable', () => {
 
     let result = methods.abortableMethod(uid as any);
 
-    methods.__signalWorkerToAbort(uid);
+    methods.__signalWorkerToAbortMethod(uid);
 
     await expect(result).rejects.toBe(WORKER_ABORTABLE_SERVICE_ABORTED);
   });
@@ -87,10 +93,16 @@ describe('workerAbortable', () => {
         let timer = setTimeout(() => {
           res(true);
         }, 0);
-        signal.addEventListener('abort', () => {
-          clearInterval(timer);
-          rej(new DOMException('Aborted', 'AbortError'));
-        });
+        signal.addEventListener(
+          'abort',
+          () => {
+            clearInterval(timer);
+            rej(new DOMException('Aborted', 'AbortError'));
+          },
+          {
+            once: true,
+          },
+        );
       });
     });
     let methods = workerAbortable(({ abortWrapper }) => {
@@ -105,7 +117,7 @@ describe('workerAbortable', () => {
 
     await sleep(10);
 
-    methods.__signalWorkerToAbort(uid);
+    methods.__signalWorkerToAbortMethod(uid);
 
     await expect(result).resolves.toBe(true);
     expect(abortableMethod).toBeCalledTimes(1);
@@ -118,10 +130,14 @@ describe('workerAbortable', () => {
         let timer = setTimeout(() => {
           res(true);
         }, 10);
-        signal.addEventListener('abort', () => {
-          clearInterval(timer);
-          rej(new DOMException('Aborted', 'AbortError'));
-        });
+        signal.addEventListener(
+          'abort',
+          () => {
+            clearInterval(timer);
+            rej(new DOMException('Aborted', 'AbortError'));
+          },
+          { once: true },
+        );
       });
     });
 
@@ -130,10 +146,16 @@ describe('workerAbortable', () => {
         let timer = setTimeout(() => {
           res(false);
         }, 10);
-        signal.addEventListener('abort', () => {
-          clearInterval(timer);
-          rej(new DOMException('Aborted', 'AbortError'));
-        });
+        signal.addEventListener(
+          'abort',
+          () => {
+            clearInterval(timer);
+            rej(new DOMException('Aborted', 'AbortError'));
+          },
+          {
+            once: true,
+          },
+        );
       });
     });
 
@@ -148,7 +170,7 @@ describe('workerAbortable', () => {
     const result1 = methods.abortableMethod1(uid as any);
     const result2 = methods.abortableMethod2(uid as any);
 
-    methods.__signalWorkerToAbort(uid);
+    methods.__signalWorkerToAbortMethod(uid);
 
     await expect(result1).rejects.toBe(WORKER_ABORTABLE_SERVICE_ABORTED);
     await expect(result2).rejects.toBe(WORKER_ABORTABLE_SERVICE_ABORTED);

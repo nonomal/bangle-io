@@ -1,18 +1,24 @@
 /* eslint-disable no-process-env */
-import reactRefresh from '@vitejs/plugin-react-refresh';
-import { injectHtml, minifyHtml } from 'vite-plugin-html';
+import Unocss from '@unocss/vite';
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
+import { createHtmlPlugin } from 'vite-plugin-html';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import getEnvVars from '@bangle.io/env-vars';
 
 const argv = require('minimist')(process.argv.slice(2));
 
-const config = ({ command, mode }) => {
+export default defineConfig(async ({ command, mode }) => {
   const isProduction = mode === 'production';
-  const envVars = getEnvVars({ isProduction: isProduction, isVite: true });
+  const envVars = await getEnvVars({
+    isProduction: isProduction,
+    isVite: true,
+  });
 
-  const hot = JSON.parse(envVars.appEnvs['process.env.BANGLE_HOT']);
+  const hot = envVars.hot;
   const port = argv.port;
+
   // NOTE: we are relying on cli passing port
   // as I couldnt find a reliable way to get the port
   // from vite. and we need port to do the proxy hack below
@@ -33,15 +39,10 @@ const config = ({ command, mode }) => {
   //   sourcemap = false;
   // }
 
-  // deleting CHANGELOG_TEXT since it becomes really long when printing
-  const printableConfig = Object.assign({}, envVars.appEnvs);
-  delete printableConfig['process.env.CHANGELOG_TEXT'];
-  console.table(printableConfig);
-
   /**
    * @type {import('vite').UserConfig}
    */
-  const c = {
+  const config = {
     build: {
       target: 'es2018',
       sourcemap: sourcemap,
@@ -53,15 +54,27 @@ const config = ({ command, mode }) => {
       format: 'es',
     },
     plugins: [
-      minifyHtml(),
-      injectHtml({
-        injectData: {
-          ...envVars.htmlInjections,
+      createHtmlPlugin({
+        minify: isProduction,
+        inject: {
+          data: { ...envVars.htmlInjections },
         },
       }),
-      hot && reactRefresh(),
+      react({
+        fastRefresh: hot,
+        exclude: [
+          '**/node_modules/**/*',
+          '**/dist/**/*',
+          '**/build/**/*',
+          '.yarn/**/*',
+          /\.stories\.(t|j)sx?$/,
+        ],
+        include: '**/*.(tsx|ts)',
+      }),
+      Unocss(),
       VitePWA({
         minify: false,
+        selfDestroying: true,
         includeAssets: [
           'favicon.svg',
           'favicon-dev.svg',
@@ -79,6 +92,7 @@ const config = ({ command, mode }) => {
     define: {
       ...envVars.appEnvs,
     },
+
     server: {
       strictPort: true,
       hmr: hot,
@@ -92,12 +106,13 @@ const config = ({ command, mode }) => {
     },
   };
 
-  return c;
-};
+  return config;
+});
 
 function generateManifest(appEnv) {
   const isProd = appEnv === 'production';
   let icons = [];
+
   if (isProd) {
     icons = [
       {
@@ -187,5 +202,3 @@ function generateManifest(appEnv) {
 
   return manifest;
 }
-
-export default config;

@@ -6,22 +6,23 @@ import React, {
   useState,
 } from 'react';
 
-import { keyDisplayValue } from '@bangle.io/config';
+import { nsmApi2 } from '@bangle.io/api';
 import { CorePalette } from '@bangle.io/constants';
 import { byLengthAsc, useFzfSearch } from '@bangle.io/fzf-search';
-import type { UnPromisify } from '@bangle.io/shared-types';
-import { pushWsPath, useWorkspaceContext } from '@bangle.io/slice-workspace';
+import { isAbortError } from '@bangle.io/mini-js-utils';
+import type { WsName, WsPath } from '@bangle.io/shared-types';
+import type { PaletteOnExecuteItem } from '@bangle.io/ui-components';
 import {
   ButtonIcon,
   FileDocumentIcon,
   SecondaryEditorIcon,
   UniversalPalette,
 } from '@bangle.io/ui-components';
-import { isAbortError, removeMdExtension } from '@bangle.io/utils';
+import { keyDisplayValue } from '@bangle.io/utils';
 import { naukarProxy } from '@bangle.io/worker-naukar-proxy';
-import { resolvePath } from '@bangle.io/ws-path';
+import { removeExtension, resolvePath2 } from '@bangle.io/ws-path';
 
-import { ExtensionPaletteType } from './config';
+import type { ExtensionPaletteType } from './config';
 
 const FZF_SEARCH_LIMIT = 64;
 const RECENT_SHOW_LIMIT = 6;
@@ -32,13 +33,14 @@ const createPaletteObject = ({
   wsPath,
   onClick,
 }: {
-  wsPath: string;
+  wsPath: WsPath;
   onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }) => {
-  const { fileName, dirPath } = resolvePath(wsPath);
+  const { fileName, dirPath } = resolvePath2(wsPath);
+
   return {
     uid: wsPath,
-    title: removeMdExtension(fileName),
+    title: removeExtension(fileName),
     rightNode: undefined,
     showDividerAbove: false,
     extraInfo: dirPath,
@@ -63,8 +65,6 @@ const createPaletteObject = ({
 };
 const NotesPalette: ExtensionPaletteType['ReactComponent'] = React.forwardRef(
   ({ query, dismissPalette, onSelect, getActivePaletteItem }, ref) => {
-    const { bangleStore } = useWorkspaceContext();
-
     const { recent: recentWsPaths, other: otherWsPaths } =
       useSearchWsPaths(query);
 
@@ -74,11 +74,8 @@ const NotesPalette: ExtensionPaletteType['ReactComponent'] = React.forwardRef(
           wsPath,
           onClick: (e) => {
             e.stopPropagation();
-            pushWsPath(
-              wsPath,
-              false,
-              true,
-            )(bangleStore.state, bangleStore.dispatch);
+            nsmApi2.workspace.pushSecondaryWsPath(wsPath);
+
             dismissPalette();
           },
         });
@@ -86,6 +83,7 @@ const NotesPalette: ExtensionPaletteType['ReactComponent'] = React.forwardRef(
         if (i === 0) {
           (obj as any).rightNode = 'Recent';
         }
+
         return obj;
       });
 
@@ -99,11 +97,8 @@ const NotesPalette: ExtensionPaletteType['ReactComponent'] = React.forwardRef(
             wsPath,
             onClick: (e) => {
               e.stopPropagation();
-              pushWsPath(
-                wsPath,
-                false,
-                true,
-              )(bangleStore.state, bangleStore.dispatch);
+              nsmApi2.workspace.pushSecondaryWsPath(wsPath);
+
               dismissPalette();
             },
           });
@@ -111,24 +106,29 @@ const NotesPalette: ExtensionPaletteType['ReactComponent'] = React.forwardRef(
           if (i === 0 && recentlyUsedItems.length > 0) {
             (obj as any).showDividerAbove = true;
           }
+
           return obj;
         }),
       ];
-    }, [otherWsPaths, recentWsPaths, query, bangleStore, dismissPalette]);
+    }, [otherWsPaths, recentWsPaths, query, dismissPalette]);
 
-    const onExecuteItem = useCallback(
+    const onExecuteItem = useCallback<PaletteOnExecuteItem>(
       (getUid, sourceInfo) => {
         const uid = getUid(items);
         const item = items.find((item) => item.uid === uid);
+
         if (item) {
-          pushWsPath(
+          nsmApi2.workspace.pushWsPath(
             item.data.wsPath,
-            sourceInfo.metaKey,
-            sourceInfo.shiftKey,
-          )(bangleStore.state, bangleStore.dispatch);
+            sourceInfo.metaKey
+              ? 'newTab'
+              : sourceInfo.shiftKey
+              ? 'secondary'
+              : 'primary',
+          );
         }
       },
-      [bangleStore, items],
+      [items],
     );
 
     // Expose onExecuteItem for the parent to call it
@@ -142,6 +142,7 @@ const NotesPalette: ExtensionPaletteType['ReactComponent'] = React.forwardRef(
     );
 
     const activeItem = getActivePaletteItem(items);
+
     return (
       <>
         <UniversalPalette.PaletteItemsContainer>
@@ -189,7 +190,7 @@ export const notesPalette: ExtensionPaletteType = {
   ReactComponent: NotesPalette,
 };
 
-const EMPTY_ARRAY: string[] = [];
+const EMPTY_ARRAY: WsPath[] = [];
 /**
  * Runs Fzf search on recent and all wsPaths.
  * @param query
@@ -197,28 +198,29 @@ const EMPTY_ARRAY: string[] = [];
  *          return.other - filtered list of wsPath that match the filter and are not part of `.recent`.
  */
 export function useSearchWsPaths(query: string) {
-  const { recentlyUsedWsPaths = EMPTY_ARRAY, wsName } = useWorkspaceContext();
+  const { recentWsPaths = EMPTY_ARRAY, wsName } =
+    nsmApi2.workspace.useWorkspace();
 
   // We are doing the following
   // 1. use fzf to shortlist the notes
   // 2. use fzf to shortlist recently used notes
   // 3. Merge them and show in palette
 
-  const recentFzfItems = useFzfSearch<string>(recentlyUsedWsPaths, query, {
+  const recentFzfItems = useFzfSearch(recentWsPaths, query, {
     limit: FZF_SEARCH_LIMIT,
-    selector: (item) => resolvePath(item).filePath,
+    selector: (item) => resolvePath2(item).filePath,
     tiebreakers: [byLengthAsc],
   });
 
   const filteredFzfItems = useSearchNotePaths(query, wsName);
 
   const filteredRecentWsPaths = useMemo(() => {
-    let wsPaths: string[];
+    let wsPaths: WsPath[];
 
     // fzf search messes up with the order. When query is empty
     // we want to preserve the order of recently used.
     if (query === '') {
-      wsPaths = recentlyUsedWsPaths;
+      wsPaths = recentWsPaths;
     } else {
       wsPaths = recentFzfItems
         .map((fzfItem, i) => fzfItem.item)
@@ -226,17 +228,20 @@ export function useSearchWsPaths(query: string) {
     }
 
     return wsPaths;
-  }, [recentFzfItems, recentlyUsedWsPaths, query]);
+  }, [recentFzfItems, recentWsPaths, query]);
 
   const filteredOtherWsPaths = useMemo(() => {
     const shownInRecentSet = new Set(filteredRecentWsPaths);
+
     if (!filteredFzfItems) {
       return [];
     }
+
     return filteredFzfItems
       .filter((r) => !shownInRecentSet.has(r.item))
       .map((fzfItem, i) => {
         const wsPath = fzfItem.item;
+
         return wsPath;
       });
   }, [filteredFzfItems, filteredRecentWsPaths]);
@@ -247,17 +252,20 @@ export function useSearchWsPaths(query: string) {
   };
 }
 
-function useSearchNotePaths(query: string, wsName: string | undefined) {
+function useSearchNotePaths(query: string, wsName: WsName | undefined) {
   const [result, updateResult] = useState<
-    | UnPromisify<ReturnType<typeof naukarProxy.abortableFzfSearchNoteWsPaths>>
+    | Awaited<
+        ReturnType<typeof naukarProxy.abortable.abortableFzfSearchNoteWsPaths>
+      >
     | undefined
   >(undefined);
 
   useEffect(() => {
     const controller = new AbortController();
     let destroyed = false;
+
     if (wsName) {
-      naukarProxy
+      naukarProxy.abortable
         .abortableFzfSearchNoteWsPaths(
           controller.signal,
           wsName,
@@ -277,6 +285,7 @@ function useSearchNotePaths(query: string, wsName: string | undefined) {
           throw error;
         });
     }
+
     return () => {
       destroyed = true;
       controller.abort();

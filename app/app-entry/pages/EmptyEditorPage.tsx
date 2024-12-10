@@ -1,36 +1,38 @@
 import React, { useMemo } from 'react';
 
-import { useBangleStoreContext } from '@bangle.io/bangle-store-context';
-import { newNote, toggleWorkspacePalette } from '@bangle.io/shared-operations';
-import { pushWsPath, useWorkspaceContext } from '@bangle.io/slice-workspace';
+import { useSerialOperationContext } from '@bangle.io/api';
 import {
-  ActionButton,
-  ButtonContent,
-  TooltipWrapper,
-} from '@bangle.io/ui-bangle-button';
+  useNsmPlainStore,
+  useNsmSlice,
+  useNsmSliceState,
+} from '@bangle.io/bangle-store-context';
+import { CORE_OPERATIONS_NEW_NOTE, CorePalette } from '@bangle.io/constants';
 import {
-  CenteredBoxedPage,
-  ChevronDownIcon,
-  NewNoteIcon,
-} from '@bangle.io/ui-components';
-import { removeMdExtension } from '@bangle.io/utils';
-import { resolvePath } from '@bangle.io/ws-path';
+  nsmSliceWorkspace,
+  pushOpenedWsPaths,
+} from '@bangle.io/nsm-slice-workspace';
+import type { WsPath } from '@bangle.io/shared-types';
+import { nsmUI, nsmUISlice } from '@bangle.io/slice-ui';
+import { Button, CenteredBoxedPage } from '@bangle.io/ui-components';
+import { removeExtension, resolvePath } from '@bangle.io/ws-path';
 
 import { WorkspaceSpan } from './WorkspaceNeedsAuth';
 
 const MAX_ENTRIES = 8;
 
 function RecentNotes({ wsPaths }: { wsPaths: string[] }) {
-  const { bangleStore } = useWorkspaceContext();
+  const nsmStore = useNsmPlainStore();
+
   const formattedPaths = useMemo(() => {
     return wsPaths.map((wsPath) => {
       return resolvePath(wsPath);
     });
   }, [wsPaths]);
+
   return (
     <div className="mb-3">
       <div className="flex flex-row mt-6">
-        <h3 className="mr-1 leading-none text-l sm:text-xl lg:text-xl">
+        <h3 className="mr-1 leading-none text-lg smallscreen:text-xl lg:text-xl">
           Recent notes
         </h3>
       </div>
@@ -41,16 +43,17 @@ function RecentNotes({ wsPaths }: { wsPaths: string[] }) {
               <button
                 role="link"
                 onClick={(e) => {
-                  pushWsPath(r.wsPath)(bangleStore.state, bangleStore.dispatch);
+                  nsmStore.dispatch(
+                    pushOpenedWsPaths((openedWsPath) => {
+                      return openedWsPath.updatePrimaryWsPath(r.wsPath);
+                    }),
+                  );
                 }}
                 className="py-1 hover:underline"
               >
-                <span>{removeMdExtension(r.fileName)} </span>
+                <span>{removeExtension(r.fileName)} </span>
                 {r.dirPath && (
-                  <span
-                    className="font-light"
-                    style={{ color: 'var(--textColor-1)' }}
-                  >
+                  <span className="font-light text-colorNeutralTextSubdued">
                     {r.dirPath}
                   </span>
                 )}
@@ -63,55 +66,44 @@ function RecentNotes({ wsPaths }: { wsPaths: string[] }) {
   );
 }
 
-const EMPTY_ARRAY: string[] = [];
+const EMPTY_ARRAY: WsPath[] = [];
 export function EmptyEditorPage() {
   const {
     wsName,
-    recentlyUsedWsPaths = EMPTY_ARRAY,
+    recentWsPaths = EMPTY_ARRAY,
     noteWsPaths,
-  } = useWorkspaceContext();
-  const bangleStore = useBangleStoreContext();
+  } = useNsmSliceState(nsmSliceWorkspace);
+  const { dispatchSerialOperation } = useSerialOperationContext();
+  const [, uiDispatch] = useNsmSlice(nsmUISlice);
   const paths = Array.from(
     new Set(
-      [...recentlyUsedWsPaths, ...(noteWsPaths || EMPTY_ARRAY)].slice(
-        0,
-        MAX_ENTRIES,
-      ),
+      [...recentWsPaths, ...(noteWsPaths || EMPTY_ARRAY)].slice(0, MAX_ENTRIES),
     ),
   );
+
   return (
     <CenteredBoxedPage
-      title={
-        wsName && (
-          <>
-            <WorkspaceSpan wsName={wsName} />
-            <ActionButton
-              isQuiet="hoverBg"
-              ariaLabel={'Switch workspace'}
-              tooltipPlacement="right"
-              tooltip={<TooltipWrapper>Switch workspace</TooltipWrapper>}
-              onPress={() => {
-                toggleWorkspacePalette()(
-                  bangleStore.state,
-                  bangleStore.dispatch,
-                );
-              }}
-            >
-              <ChevronDownIcon className="w-5 h-5" />
-            </ActionButton>
-          </>
-        )
-      }
+      dataTestId="app-app-entry_pages-empty-editor-page"
+      title={wsName && <WorkspaceSpan wsName={wsName} />}
       actions={
         <>
-          <ActionButton
+          <Button
+            ariaLabel="Switch workspace"
+            tooltipPlacement="right"
+            text="Switch workspace"
+            onPress={() => {
+              uiDispatch(nsmUI.togglePalette(CorePalette.Workspace));
+            }}
+          />
+          <Button
             ariaLabel="create note"
             onPress={() => {
-              newNote()(bangleStore.state, bangleStore.dispatch);
+              dispatchSerialOperation({
+                name: CORE_OPERATIONS_NEW_NOTE,
+              });
             }}
-          >
-            <ButtonContent text="Create note" icon={<NewNoteIcon />} />
-          </ActionButton>
+            text="Create note"
+          />
         </>
       }
     >

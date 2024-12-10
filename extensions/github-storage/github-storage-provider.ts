@@ -1,145 +1,67 @@
-import * as idb from 'idb-keyval';
-
+import { wsPathHelpers } from '@bangle.io/api';
+import { calculateGitFileSha } from '@bangle.io/git-file-sha';
+import type { PlainObjEntry } from '@bangle.io/remote-file-sync';
 import {
-  LocalFileEntryManager,
-  RemoteFileEntry,
+  makeLocalEntryFromRemote,
+  makeLocallyCreatedEntry,
 } from '@bangle.io/remote-file-sync';
-import { BaseStorageProvider, StorageOpts } from '@bangle.io/storage';
-import { BaseError, getLast } from '@bangle.io/utils';
-import { fromFsPath, isValidFileWsPath, resolvePath } from '@bangle.io/ws-path';
+import type { StorageProviderOnChange } from '@bangle.io/shared-types';
+import type { BaseStorageProvider, StorageOpts } from '@bangle.io/storage';
+import { BaseError, errorParse, errorSerialize } from '@bangle.io/utils';
 
+import type { GithubWsMetadata } from './common';
 import { GITHUB_STORAGE_PROVIDER_NAME } from './common';
-import {
-  GITHUB_STORAGE_NOT_ALLOWED,
-  INVALID_GITHUB_FILE_FORMAT,
-  INVALID_GITHUB_TOKEN,
-} from './errors';
-import { getAllFiles, getFileBlob } from './github-api-helpers';
+import { getGhToken } from './database';
+import { GITHUB_STORAGE_NOT_ALLOWED, INVALID_GITHUB_TOKEN } from './errors';
+import { fileEntryManager } from './file-entry-manager';
+import { getFileBlobFromTree, getRepoTree } from './github-api-helpers';
 
-interface WsMetadata {
-  githubToken: string;
-  owner: string;
-  branch: string;
-}
-
-const allowedFile = (path: string) => {
-  if (path.includes(':')) {
-    return false;
-  }
-  if (path.includes('//')) {
-    return false;
-  }
-  const fileName = getLast(path.split('/'));
-  if (fileName === undefined) {
-    return false;
-  }
-
-  if (fileName.startsWith('.')) {
-    return false;
-  }
-
-  return true;
-};
+const LOG = false;
+const log = LOG
+  ? console.debug.bind(console, 'github-storage-provider')
+  : () => {};
 
 export class GithubStorageProvider implements BaseStorageProvider {
   name = GITHUB_STORAGE_PROVIDER_NAME;
   displayName = 'Github storage';
   description = '';
   hidden = true;
+  onChange: StorageProviderOnChange = () => {};
 
-  ghFileBlobsMap: Map<string, string> | undefined;
-  fileEntryManager = new LocalFileEntryManager({
-    get: (key: string) => {
-      return idb.get(`gh-store-1:${key}`);
-    },
-    set: (key, entry) => {
-      return idb.set(`gh-store-1:${key}`, entry);
-    },
-    entries: () => {
-      return idb.entries().then((entries) => {
-        return entries
-          .filter(([key]) => {
-            if (typeof key === 'string') {
-              return key.startsWith('gh-store-1:');
-            }
-            return false;
-          })
-          .map(([key, value]) => [key, value] as [string, any]);
-      });
-    },
-    delete: (key) => {
-      return idb.del(`gh-store-1:${key}`);
-    },
-  });
-
-  private makeGetRemoteFileEntryCb(wsPath: string, opts: StorageOpts) {
-    return async () => {
-      const { wsName, fileName } = resolvePath(wsPath);
-
-      if (!this.ghFileBlobsMap) {
-        await this.listAllFiles(new AbortController().signal, wsName, opts);
-      }
-
-      const path = this.ghFileBlobsMap?.get(wsPath);
-
-      if (!path) {
-        return undefined;
-      }
-      const wsMetadata = opts.readWorkspaceMetadata() as WsMetadata;
-
-      const file = await getFileBlob({
-        fileBlobUrl: path,
-        fileName,
-        config: {
-          branch: wsMetadata.branch,
-          owner: wsMetadata.owner,
-          githubToken: wsMetadata.githubToken,
-          repoName: wsName,
-        },
-      });
-
-      return RemoteFileEntry.newFile({
-        uid: wsPath,
-        file,
-        deleted: undefined,
-      });
-    };
-  }
-
-  async newWorkspaceMetadata(wsName: string, createOpts: any) {
-    if (!createOpts.githubToken) {
-      throw new BaseError({
-        message: 'Github token is required',
-        code: INVALID_GITHUB_TOKEN,
-      });
-    }
-    if (!createOpts.owner) {
-      throw new BaseError({
-        message: 'Github owner is required',
-        code: INVALID_GITHUB_TOKEN,
-      });
-    }
-    return {
-      githubToken: createOpts.githubToken,
-      owner: createOpts.owner,
-      branch: createOpts.branch,
-    };
-  }
-
-  async fileExists(wsPath: string, opts: StorageOpts): Promise<boolean> {
-    return Boolean(await this.readFile(wsPath, opts));
-  }
-
+  private _getTree = getRepoTree();
   async createFile(
     wsPath: string,
     file: File,
     opts: StorageOpts,
   ): Promise<void> {
-    await this.fileEntryManager.createFile(
-      wsPath,
+    const entry = makeLocallyCreatedEntry({
+      uid: wsPath,
       file,
-      this.makeGetRemoteFileEntryCb(wsPath, opts),
-    );
+      sha: await calculateGitFileSha(file),
+    });
+
+    // TODO we should throw error if file already exists?
+    const success = await fileEntryManager.createEntry(entry);
+
+    this.onChange({
+      type: 'create',
+      wsPath,
+    });
+  }
+
+  async deleteFile(wsPath: string, opts: StorageOpts): Promise<void> {
+    // TODO: currently if a local entry does not exist
+    // we donot mark it for deletion. We should do that.
+    await fileEntryManager.softDeleteEntry(wsPath);
+
+    this.onChange({
+      type: 'delete',
+      wsPath,
+    });
+  }
+
+  async fileExists(wsPath: string, opts: StorageOpts): Promise<boolean> {
+    return Boolean(await this.readFile(wsPath, opts));
   }
 
   async fileStat(wsPath: string, opts: StorageOpts) {
@@ -147,27 +69,12 @@ export class GithubStorageProvider implements BaseStorageProvider {
       message: 'fileStat is not supported',
       code: GITHUB_STORAGE_NOT_ALLOWED,
     });
+
     return {} as any;
   }
 
-  async deleteFile(wsPath: string, opts: StorageOpts): Promise<void> {
-    await this.fileEntryManager.deleteFile(
-      wsPath,
-      this.makeGetRemoteFileEntryCb(wsPath, opts),
-    );
-  }
-
-  async readFile(wsPath: string, opts: StorageOpts): Promise<File | undefined> {
-    const file = await this.fileEntryManager.readFile(
-      wsPath,
-      this.makeGetRemoteFileEntryCb(wsPath, opts),
-    );
-
-    if (!file) {
-      return undefined;
-    }
-
-    return file;
+  isSupported() {
+    return true;
   }
 
   async listAllFiles(
@@ -175,90 +82,105 @@ export class GithubStorageProvider implements BaseStorageProvider {
     wsName: string,
     opts: StorageOpts,
   ): Promise<string[]> {
-    const getRemoteFiles = async () => {
-      const wsMetadata = opts.readWorkspaceMetadata() as WsMetadata;
-      const data = await getAllFiles({
-        abortSignal,
-        config: {
-          branch: wsMetadata.branch,
-          owner: wsMetadata.owner,
-          githubToken: wsMetadata.githubToken,
-          repoName: wsName,
-        },
-        treeSha: wsMetadata.branch,
+    const wsMetadata = (await opts.readWorkspaceMetadata(
+      wsName,
+    )) as GithubWsMetadata;
+
+    const githubToken = await getGhToken();
+
+    if (!githubToken) {
+      throw new BaseError({
+        message: 'Github token is required',
+        code: INVALID_GITHUB_TOKEN,
       });
+    }
 
-      this.ghFileBlobsMap?.clear();
-      this.ghFileBlobsMap = new Map();
+    if (abortSignal.aborted) {
+      return [];
+    }
 
-      return data
-        .map((item): string | undefined => {
-          const path = item.path;
-          if (!allowedFile(path)) {
-            return undefined;
-          }
+    // TODO querying files from github sometimes can result in `Git Repository is empty.` base error
+    // lets make sure we can retry it.
+    const { tree } = await this._getTree({
+      wsName,
+      config: { repoName: wsName, ...wsMetadata, githubToken },
+      abortSignal,
+    });
 
-          const wsPath = fromFsPath(wsName + '/' + item.path);
+    let allKeys = await fileEntryManager.listAllKeys(wsName);
 
-          if (!wsPath) {
-            throw new BaseError({
-              message: `Your repository contains a file name "${item.path}" which is not supported`,
-              code: INVALID_GITHUB_FILE_FORMAT,
-            });
-          }
-          if (!isValidFileWsPath(wsPath)) {
-            return undefined;
-          }
+    let softDeletedKeys = new Set(
+      await fileEntryManager.listSoftDeletedKeys(wsName),
+    );
 
-          this.ghFileBlobsMap?.set(wsPath, item.url);
-          return wsPath;
-        })
-        .filter(
-          (wsPath: string | undefined): wsPath is string =>
-            typeof wsPath === 'string',
-        );
-    };
-
-    const files = await this.fileEntryManager.listFiles(getRemoteFiles);
-    return files;
+    return Array.from(new Set([...allKeys, ...tree.keys()])).filter((key) => {
+      return !softDeletedKeys.has(key);
+    });
   }
 
-  async writeFile(
-    wsPath: string,
-    file: File,
-    opts: StorageOpts,
-  ): Promise<void> {
-    await this.fileEntryManager.writeFile(wsPath, file);
+  async newWorkspaceMetadata(wsName: string, createOpts: any) {
+    if (!createOpts.owner) {
+      throw new BaseError({
+        message: 'Github owner is required',
+        code: INVALID_GITHUB_TOKEN,
+      });
+    }
 
-    // const writer = this.manager.getWriter(wsName);
-    // writer.addFile(wsPath, file);
-    // console.log(
-    //   'saving file',
-    //   wsPath,
-    //   (await this.idbProvider.fileToDoc(file, opts)).toString(),
-    // );
+    if (!createOpts.branch) {
+      throw new BaseError({
+        message: 'Github branch is required',
+        code: INVALID_GITHUB_TOKEN,
+      });
+    }
 
-    // if (await this.fileExists(wsPath, opts)) {
-    //   const oldSha = await getFileSha(await this.getFile(wsPath, opts));
-    //   const newSha = await getFileSha(file);
+    return {
+      owner: createOpts.owner,
+      branch: createOpts.branch,
+    };
+  }
 
-    //   if (oldSha === newSha) {
-    //     console.warn('same data ' + wsPath);
-    //     return;
-    //   }
-    // }
+  parseError(errorString: string) {
+    try {
+      return errorParse(JSON.parse(errorString));
+    } catch (error) {
+      return undefined;
+    }
+  }
 
-    // const updatedShas = await writer.commit(wsName, {
-    //   repoName: wsName,
-    //   branch: githubConfig.branch,
-    //   githubToken: githubConfig.githubToken,
-    //   owner: githubConfig.owner,
-    // });
+  async readFile(wsPath: string, opts: StorageOpts): Promise<File | undefined> {
+    const { wsName } = wsPathHelpers.resolvePath(wsPath);
 
-    // updatedShas.forEach(async ([filePath, apiUrl]) => {
-    //   const wsPath = fromFsPath(wsName + '/' + filePath)!;
-    //   this.fileBlobs?.set(wsPath, apiUrl);
-    // });
+    // check if file exists in local db
+    const plainObj = await fileEntryManager.readEntry(wsPath);
+
+    if (plainObj?.deleted) {
+      return undefined;
+    }
+    if (plainObj) {
+      return plainObj.file;
+    }
+
+    // if we reach here, file doesn't exist locally
+    // so we fetch from github and create a local entry
+    const wsMetadata = (await opts.readWorkspaceMetadata(
+      wsName,
+    )) as GithubWsMetadata;
+
+    const localEntry = await (
+      await this._makeGetRemoteFileEntryCb(wsMetadata)
+    )(wsPath);
+
+    if (!localEntry) {
+      return undefined;
+    }
+
+    const createSuccess = await fileEntryManager.createEntry(localEntry);
+
+    if (createSuccess) {
+      return localEntry.file;
+    }
+
+    return undefined;
   }
 
   async renameFile(
@@ -267,6 +189,7 @@ export class GithubStorageProvider implements BaseStorageProvider {
     opts: StorageOpts,
   ): Promise<void> {
     const file = await this.readFile(wsPath, opts);
+
     if (!file) {
       throw new BaseError({
         message: 'Cannot rename as file not found',
@@ -276,5 +199,85 @@ export class GithubStorageProvider implements BaseStorageProvider {
 
     await this.createFile(newWsPath, file, opts);
     await this.deleteFile(wsPath, opts);
+
+    this.onChange({
+      type: 'rename',
+      oldWsPath: wsPath,
+      newWsPath,
+    });
+  }
+
+  serializeError(error: Error) {
+    return JSON.stringify(errorSerialize(error));
+  }
+
+  async writeFile(
+    wsPath: string,
+    file: File,
+    opts: StorageOpts,
+    sha?: string,
+  ): Promise<void> {
+    log('writeFile', wsPath, file);
+
+    let result = await fileEntryManager.writeFile(wsPath, file, sha);
+
+    // TODO write a test to make sure error is thrown if file is not found
+    if (!result) {
+      throw new BaseError({
+        message: `File ${wsPath} not found`,
+        code: GITHUB_STORAGE_NOT_ALLOWED,
+      });
+    }
+
+    this.onChange({
+      type: 'write',
+      wsPath,
+    });
+  }
+
+  private async _makeGetRemoteFileEntryCb(
+    wsMetadata: GithubWsMetadata,
+    abortSignal: AbortSignal = new AbortController().signal,
+  ) {
+    const githubToken = await getGhToken();
+
+    if (!githubToken) {
+      throw new BaseError({
+        message: 'Github token is required',
+        code: INVALID_GITHUB_TOKEN,
+      });
+    }
+
+    return async (wsPath: string): Promise<PlainObjEntry | undefined> => {
+      const { wsName } = wsPathHelpers.resolvePath(wsPath, true);
+
+      const config = {
+        repoName: wsName,
+        ...wsMetadata,
+        githubToken,
+      };
+
+      const tree = await this._getTree({
+        wsName,
+        config,
+        abortSignal,
+      });
+      const file = await getFileBlobFromTree({
+        wsPath,
+        config,
+        abortSignal,
+        tree,
+      });
+
+      if (!file) {
+        return undefined;
+      }
+
+      return makeLocalEntryFromRemote({
+        uid: wsPath,
+        file: file,
+        sha: await calculateGitFileSha(file),
+      });
+    };
   }
 }

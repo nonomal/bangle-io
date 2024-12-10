@@ -8,7 +8,7 @@ import { splitWsPath } from '@bangle.io/ws-path';
  *          the parent directory path comes before the file path.
  *          dirSet - a JS Set of directory path
  */
-export function fileWsPathsToFlatDirTree(wsFilePaths: string[]) {
+export function fileWsPathsToFlatDirTree(wsFilePaths: readonly string[]) {
   const dirSet = new Set<string>();
   const filePaths = wsFilePaths.map((f) => {
     return splitWsPath(f)[1];
@@ -19,6 +19,7 @@ export function fileWsPathsToFlatDirTree(wsFilePaths: string[]) {
     let pos;
     while ((pos = str.lastIndexOf('/')) !== -1) {
       str = str.substring(0, pos);
+
       // if parent set has the str
       // it has already worked on this before
       // and we can safely skip it.
@@ -37,6 +38,7 @@ export function fileWsPathsToFlatDirTree(wsFilePaths: string[]) {
     for (let i = 0; i < till; i++) {
       const aSide = aSplit[i];
       const bSide = bSplit[i];
+
       if (aSide === bSide) {
         continue;
       }
@@ -49,6 +51,7 @@ export function fileWsPathsToFlatDirTree(wsFilePaths: string[]) {
         if (!dirSet.has(b) && bSplit[i + 1] === undefined) {
           return -1;
         }
+
         return aSide.localeCompare(bSide);
       }
     }

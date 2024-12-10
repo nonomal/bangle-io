@@ -1,28 +1,29 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
 
+import { PRIMARY_EDITOR_INDEX } from '@bangle.io/constants';
+
+import { withBangle as test } from '../fixture-with-bangle';
 import {
   clearEditor,
   createNewNote,
   createWorkspace,
   getEditorDebugString,
   getEditorHTML,
-  longSleep,
   sleep,
 } from '../helpers';
 
-test.beforeEach(async ({ page, baseURL }, testInfo) => {
-  await page.goto(baseURL!, { waitUntil: 'networkidle' });
+test.beforeEach(async ({ bangleApp }, testInfo) => {
+  await bangleApp.open();
 });
 
-test.describe.parallel('emoji', () => {
+test.describe('emoji', () => {
   test('Emoji works in heading', async ({ page }) => {
     const wsName = await createWorkspace(page);
 
     await createNewNote(page, wsName, 'test123');
-    await longSleep();
 
     const editorHandle = page.locator('.bangle-editor');
-    await clearEditor(page, 0);
+    await clearEditor(page, PRIMARY_EDITOR_INDEX);
     await sleep();
     await editorHandle.type('# Wow :', { delay: 3 });
     await editorHandle.press('ArrowDown');
@@ -32,9 +33,9 @@ test.describe.parallel('emoji', () => {
 
     expect(html.includes('😉')).toBe(true);
 
-    expect(await getEditorDebugString(page, 0)).toMatchSnapshot(
-      'emonji in headings',
-    );
+    expect(
+      await getEditorDebugString(page, PRIMARY_EDITOR_INDEX),
+    ).toMatchSnapshot('emonji in headings');
   });
 
   test('Emoji works in para', async ({ page }) => {
@@ -44,7 +45,7 @@ test.describe.parallel('emoji', () => {
 
     const editorHandle = page.locator('.bangle-editor');
 
-    await clearEditor(page, 0);
+    await clearEditor(page, PRIMARY_EDITOR_INDEX);
 
     await editorHandle.type('life is good :zeb', { delay: 1 });
     await editorHandle.press('Enter');
@@ -60,7 +61,7 @@ test.describe.parallel('emoji', () => {
 
     const editorHandle = page.locator('.bangle-editor');
 
-    await clearEditor(page, 0);
+    await clearEditor(page, PRIMARY_EDITOR_INDEX);
 
     await editorHandle.type('- I am a list :zeb', { delay: 1 });
     await editorHandle.press('Enter');

@@ -1,9 +1,10 @@
 /**
- * @jest-environment jsdom
+ * @jest-environment @bangle.io/jsdom-env
  */
 import { act, render, waitFor } from '@testing-library/react';
 import React from 'react';
 
+import { SECONDARY_EDITOR_INDEX } from '@bangle.io/constants';
 import { Editor } from '@bangle.io/editor';
 import { useEditorManagerContext } from '@bangle.io/slice-editor-manager';
 import {
@@ -17,8 +18,18 @@ import {
 
 import { EditorContainer } from '../EditorContainer';
 
+jest.mock('@bangle.io/extension-registry', () => {
+  const actual = jest.requireActual('@bangle.io/extension-registry');
+
+  return {
+    ...actual,
+    useExtensionRegistryContext: jest.fn(),
+  };
+});
+
 jest.mock('@bangle.io/slice-workspace', () => {
   const actual = jest.requireActual('@bangle.io/slice-workspace');
+
   return {
     ...actual,
     checkFileExists: jest.fn(() => () => Promise.resolve(true)),
@@ -26,8 +37,18 @@ jest.mock('@bangle.io/slice-workspace', () => {
   };
 });
 
+jest.mock('@bangle.io/slice-notification', () => {
+  const actual = jest.requireActual('@bangle.io/slice-notification');
+
+  return {
+    ...actual,
+    getEditorIssue: jest.fn(() => () => undefined),
+  };
+});
+
 jest.mock('@bangle.io/slice-editor-manager', () => {
   const actual = jest.requireActual('@bangle.io/slice-editor-manager');
+
   return {
     ...actual,
     useEditorManagerContext: jest.fn(),
@@ -36,6 +57,7 @@ jest.mock('@bangle.io/slice-editor-manager', () => {
 
 jest.mock('@bangle.io/editor', () => {
   const actual = jest.requireActual('@bangle.io/editor');
+
   return {
     ...actual,
     Editor: jest.fn(),
@@ -44,6 +66,7 @@ jest.mock('@bangle.io/editor', () => {
 
 jest.mock('../config', () => {
   const actual = jest.requireActual('../config');
+
   return {
     ...actual,
     EDITOR_LOAD_WAIT_TIME: 0,
@@ -83,7 +106,7 @@ test('basic renders', async () => {
     result = render(
       <div>
         <EditorContainer
-          editorId={1}
+          editorId={SECONDARY_EDITOR_INDEX}
           widescreen={true}
           wsPath="something:blah.md"
         />
@@ -99,9 +122,10 @@ test('basic renders', async () => {
 
   expect(Editor).lastCalledWith(
     {
-      editorId: 1,
+      editorId: SECONDARY_EDITOR_INDEX,
       wsPath: 'something:blah.md',
-      className: `editor-container_editor editor-container_editor-1`,
+      className: `B-editor-container_editor B-editor-container_editor-1`,
+      extensionRegistry: undefined,
     },
     {},
   );
@@ -115,7 +139,7 @@ test('renders correctly when file does not exist', async () => {
     result = render(
       <div>
         <EditorContainer
-          editorId={1}
+          editorId={SECONDARY_EDITOR_INDEX}
           widescreen={true}
           wsPath="something:blah.md"
         />
@@ -149,7 +173,7 @@ test('changing of wsPath works', async () => {
     result = render(
       <div>
         <EditorContainer
-          editorId={1}
+          editorId={SECONDARY_EDITOR_INDEX}
           widescreen={true}
           wsPath="something:one.md"
         />
@@ -165,9 +189,10 @@ test('changing of wsPath works', async () => {
 
   expect(Editor).lastCalledWith(
     {
-      editorId: 1,
+      editorId: SECONDARY_EDITOR_INDEX,
       wsPath: 'something:one.md',
-      className: `editor-container_editor editor-container_editor-1`,
+      className: `B-editor-container_editor B-editor-container_editor-1`,
+      extensionRegistry: undefined,
     },
     {},
   );
@@ -176,7 +201,7 @@ test('changing of wsPath works', async () => {
     result.rerender(
       <div>
         <EditorContainer
-          editorId={1}
+          editorId={SECONDARY_EDITOR_INDEX}
           widescreen={true}
           wsPath="something:two.md"
         />
@@ -190,9 +215,10 @@ test('changing of wsPath works', async () => {
 
   expect(Editor).lastCalledWith(
     {
-      editorId: 1,
+      editorId: SECONDARY_EDITOR_INDEX,
       wsPath: 'something:two.md',
-      className: `editor-container_editor editor-container_editor-1`,
+      className: `B-editor-container_editor B-editor-container_editor-1`,
+      extensionRegistry: undefined,
     },
     {},
   );

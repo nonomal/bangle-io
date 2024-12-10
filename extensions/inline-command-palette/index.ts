@@ -1,11 +1,12 @@
-import { EditorView, keymap } from '@bangle.dev/pm';
+import type { EditorView } from '@bangle.dev/pm';
+import { keymap } from '@bangle.dev/pm';
 
-import { keybindings } from '@bangle.io/config';
 import { Extension } from '@bangle.io/extension-registry';
 import {
   inlinePalette,
   queryInlinePaletteActive,
 } from '@bangle.io/inline-palette';
+import { keybindings } from '@bangle.io/utils';
 
 import { extensionName, paletteMarkName, palettePluginKey } from './config';
 import { InlineCommandPalette } from './InlineCommandPalette';
@@ -45,6 +46,7 @@ const extension = Extension.create({
           const mark = schema.mark(paletteMarkName, { trigger });
 
           const textBefore = selection.$from.nodeBefore?.text;
+
           // Insert a space so we follow the convention of <space> trigger
           if (textBefore && !textBefore.endsWith(' ')) {
             tr.replaceSelectionWith(schema.text(' '), false);
@@ -54,6 +56,7 @@ const extension = Extension.create({
             false,
           );
           dispatch?.(tr);
+
           return true;
         },
       }),

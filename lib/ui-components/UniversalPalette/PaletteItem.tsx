@@ -1,4 +1,5 @@
-import React, { ReactNode, useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 import {
   cx,
@@ -26,12 +27,12 @@ export function PaletteItemUI({
   isActive,
   className = '',
   scrollIntoViewIfNeeded = true,
-  allowHover = !isTouchDevice(),
+  allowHover = !isTouchDevice,
   style,
 }: {
   allowHover?: boolean;
   item: ItemType;
-  onClick: (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => void;
+  onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
   isActive?: boolean;
   className?: string;
   scrollIntoViewIfNeeded?: boolean;
@@ -46,11 +47,9 @@ export function PaletteItemUI({
 
   const titleElement = (
     <span>
-      <span className="b-palette-title text-base font-normal">
-        {item.title}
-      </span>
+      <span className="text-base font-normal">{item.title}</span>
       {item.extraInfo && (
-        <span className="b-extra-info text-base font-light">
+        <span className="B-ui-components_extra-info text-base font-light">
           {item.extraInfo}
         </span>
       )}
@@ -63,12 +62,12 @@ export function PaletteItemUI({
       ref={ref}
       onClick={onClick}
       className={cx(
-        'universal-palette-item',
+        'B-ui-components_universal-palette-item',
         className,
-        isActive && 'active',
-        item.isDisabled && 'disabled',
-        item.showDividerAbove && 'b-divider',
-        allowHover && 'allow-hover',
+        isActive && 'BU_active',
+        item.isDisabled && 'BU_disabled',
+        item.showDividerAbove && 'BU_divider',
+        allowHover && 'BU_allow-hover',
       )}
       style={{
         cursor: 'pointer',
@@ -79,19 +78,23 @@ export function PaletteItemUI({
       }}
     >
       <div className="flex flex-row">
-        <div className="b-left-node">{item.leftNode}</div>
+        <div className="B-ui-components_left-node">{item.leftNode}</div>
         {item.description ? (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {titleElement}
-            <span className="b-description text-sm">{item.description}</span>
+            <span className="B-ui-components_description text-sm">
+              {item.description}
+            </span>
           </div>
         ) : (
           titleElement
         )}
       </div>
       <div className="flex flex-row">
-        <span className="b-right-node">{item.rightNode}</span>
-        <span className="b-right-hover-node">{item.rightHoverNode}</span>
+        <span className="B-ui-components_right-node">{item.rightNode}</span>
+        <span className="B-ui-components_right-hover-node">
+          {item.rightHoverNode}
+        </span>
       </div>
     </div>
   );

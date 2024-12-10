@@ -1,5 +1,12 @@
-import { expect, Page, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect } from '@playwright/test';
 
+import {
+  PRIMARY_EDITOR_INDEX,
+  SECONDARY_EDITOR_INDEX,
+} from '@bangle.io/constants';
+
+import { withBangle as test } from '../fixture-with-bangle';
 import {
   clearEditor,
   createNewNote,
@@ -7,7 +14,6 @@ import {
   getEditorDebugString,
   getEditorLocator,
   getEditorSelectionJson,
-  isIntersectingViewport,
   longSleep,
   runOperation,
   sleep,
@@ -17,13 +23,13 @@ import {
   waitForWsPathToLoad,
 } from '../helpers';
 
-test.beforeEach(async ({ page, baseURL }, testInfo) => {
-  await page.goto(baseURL!, { waitUntil: 'networkidle' });
+test.beforeEach(async ({ bangleApp }, testInfo) => {
+  await bangleApp.open();
 });
 
 const getTopAndLastElement = async (page: Page) => {
-  const topLocator = page.locator('.editor-container_editor-0 h2');
-  const lastLocator = page.locator('.editor-container_editor-0 h3');
+  const topLocator = page.locator('.B-editor-container_editor-0 h2');
+  const lastLocator = page.locator('.B-editor-container_editor-0 h3');
 
   await expect(topLocator).toHaveText('top element', { useInnerText: true });
 
@@ -36,16 +42,19 @@ const getTopAndLastElement = async (page: Page) => {
 };
 
 const typeScrollableThings = async (page: Page) => {
-  let editorLocator = await getEditorLocator(page, 0, { focus: true });
-  await clearEditor(page, 0);
-  await page.keyboard.type('## top element');
+  let editorLocator = await getEditorLocator(page, PRIMARY_EDITOR_INDEX, {
+    focus: true,
+  });
+  // TODO there is a bug that sometimes typed thing is missed and never recorded
+  await clearEditor(page, PRIMARY_EDITOR_INDEX);
+  await page.keyboard.type('## top element', { delay: 5 });
   await page.keyboard.press('Enter');
   for (let i = 0; i < 15; i++) {
-    await page.keyboard.type('# ' + i);
-    await page.keyboard.press('Enter');
+    await page.keyboard.type('# ' + i, { delay: 10 });
+    await page.keyboard.press('Enter', { delay: 10 });
   }
 
-  await page.keyboard.type('### last element');
+  await page.keyboard.type('### last element', { delay: 5 });
 
   await sleep();
 
@@ -61,7 +70,7 @@ const typeScrollableThings = async (page: Page) => {
   await longSleep();
 };
 
-test.describe.parallel('scroll', () => {
+test.describe('scroll', () => {
   for (const screenType of ['regular', 'split-screen']) {
     test(screenType + ' scroll state preserve', async ({ page }) => {
       const wsName = await createWorkspace(page);
@@ -69,48 +78,57 @@ test.describe.parallel('scroll', () => {
 
       if (screenType === 'split-screen') {
         await splitScreen(page);
-        await getEditorLocator(page, 1);
+        await getEditorLocator(page, SECONDARY_EDITOR_INDEX);
 
         // eslint-disable-next-line jest/no-conditional-expect
-        expect(await page.$('.editor-container_editor-1')).not.toBeNull();
+        expect(await page.$('.B-editor-container_editor-1')).not.toBeNull();
       }
 
       await typeScrollableThings(page);
 
-      const selectionJSON = await getEditorSelectionJson(page, 0);
+      const selectionJSON = await getEditorSelectionJson(
+        page,
+        PRIMARY_EDITOR_INDEX,
+      );
 
       let { topLocator, lastLocator } = await getTopAndLastElement(page);
 
       // check that the last element is in view port
-      expect(await isIntersectingViewport(topLocator)).toBe(false);
-      expect(await isIntersectingViewport(lastLocator)).toBe(true);
+      await expect(topLocator).not.toBeInViewport();
+      await expect(lastLocator).toBeInViewport();
 
       await createNewNote(page, wsName, 'other-note-1');
 
-      await getEditorLocator(page, 0);
+      await getEditorLocator(page, PRIMARY_EDITOR_INDEX);
 
       await expect(page).toHaveTitle(/other-note-1/);
 
-      await waitForEditorTextToContain(page, 0, 'other-note-1');
+      await waitForEditorTextToContain(
+        page,
+        PRIMARY_EDITOR_INDEX,
+        'other-note-1',
+      );
 
-      expect(await getEditorDebugString(page, 0)).toEqual(
-        `doc(heading(\"other-note-1\"), paragraph(\"Hello world!\"))`,
+      expect(await getEditorDebugString(page, PRIMARY_EDITOR_INDEX)).toEqual(
+        `doc(heading("other-note-1"), paragraph("Hello world!"))`,
       );
 
       await page.goBack({ waitUntil: 'networkidle' });
 
-      await getEditorLocator(page, 0);
+      await getEditorLocator(page, PRIMARY_EDITOR_INDEX);
 
       // make sure we are back to our previous page
       await expect(page).toHaveTitle(/test123/);
 
       await longSleep();
 
-      expect(await isIntersectingViewport(topLocator)).toBe(false);
-      expect(await isIntersectingViewport(lastLocator)).toBe(true);
+      await expect(topLocator).not.toBeInViewport();
+      await expect(lastLocator).toBeInViewport();
 
       // check if selection is preserved
-      expect(selectionJSON).toEqual(await getEditorSelectionJson(page, 0));
+      expect(selectionJSON).toEqual(
+        await getEditorSelectionJson(page, PRIMARY_EDITOR_INDEX),
+      );
     });
   }
   test('reloading preserves scroll & selection', async ({ page }) => {
@@ -121,22 +139,22 @@ test.describe.parallel('scroll', () => {
 
     let { topLocator, lastLocator } = await getTopAndLastElement(page);
     // check that the last element is in view port
-    expect(await isIntersectingViewport(topLocator)).toBe(false);
-    expect(await isIntersectingViewport(lastLocator)).toBe(true);
+    await expect(topLocator).not.toBeInViewport();
+    await expect(lastLocator).toBeInViewport();
 
     // let editor flush out changes or it will block reload
     await longSleep(300);
 
     await page.reload({ timeout: 8000, waitUntil: 'networkidle' });
 
-    await getEditorLocator(page, 0);
+    await getEditorLocator(page, PRIMARY_EDITOR_INDEX);
 
     // make sure we are back to our previous page
     await expect(page).toHaveTitle(/test123/);
 
     // check if the scroll state is preserved
-    expect(await isIntersectingViewport(topLocator)).toBe(false);
-    expect(await isIntersectingViewport(lastLocator)).toBe(true);
+    await expect(topLocator).not.toBeInViewport();
+    await expect(lastLocator).toBeInViewport();
 
     await page.keyboard.press('Enter');
 
@@ -145,10 +163,10 @@ test.describe.parallel('scroll', () => {
       '#### My existence at the bottom proves that I was spared from a reload.',
     );
 
-    expect(await isIntersectingViewport(topLocator)).toBe(false);
-    expect(await isIntersectingViewport(lastLocator)).toBe(true);
-    expect(await getEditorDebugString(page, 0)).toEqual(
-      `doc(heading(\"top element\"), heading(\"0\"), heading(\"1\"), heading(\"2\"), heading(\"3\"), heading(\"4\"), heading(\"5\"), heading(\"6\"), heading(\"7\"), heading(\"8\"), heading(\"9\"), heading(\"10\"), heading(\"11\"), heading(\"12\"), heading(\"13\"), heading(\"14\"), heading(\"last element\"), heading(\"My existence at the bottom proves that I was spared from a reload.\"), paragraph)`,
+    await expect(topLocator).not.toBeInViewport();
+    await expect(lastLocator).toBeInViewport();
+    expect(await getEditorDebugString(page, PRIMARY_EDITOR_INDEX)).toEqual(
+      `doc(heading("top element"), heading("0"), heading("1"), heading("2"), heading("3"), heading("4"), heading("5"), heading("6"), heading("7"), heading("8"), heading("9"), heading("10"), heading("11"), heading("12"), heading("13"), heading("14"), heading("last element"), heading("My existence at the bottom proves that I was spared from a reload."), paragraph)`,
     );
   });
 
@@ -160,17 +178,17 @@ test.describe.parallel('scroll', () => {
 
     await runOperation(
       page,
-      'operation::@bangle.io/core-operations:TOGGLE_EDITOR_SPLIT',
+      'operation::@bangle.io/core-extension:TOGGLE_EDITOR_SPLIT',
     );
 
-    await getEditorLocator(page, 1, { wsPath });
+    await getEditorLocator(page, SECONDARY_EDITOR_INDEX, { wsPath });
 
     // let editor flush out changes or it will block reload
     await longSleep(300);
 
     await page.reload({ timeout: 8000, waitUntil: 'networkidle' });
 
-    await getEditorLocator(page, 1, { wsPath });
+    await getEditorLocator(page, SECONDARY_EDITOR_INDEX, { wsPath });
 
     expect(true).toBe(true);
   });
@@ -183,25 +201,25 @@ test.describe.parallel('scroll', () => {
 
     await runOperation(
       page,
-      'operation::@bangle.io/core-operations:TOGGLE_EDITOR_SPLIT',
+      'operation::@bangle.io/core-extension:TOGGLE_EDITOR_SPLIT',
     );
 
     await sleep();
 
-    await waitForWsPathToLoad(page, 1, { wsPath });
+    await waitForWsPathToLoad(page, SECONDARY_EDITOR_INDEX, { wsPath });
 
     await runOperation(
       page,
-      'operation::@bangle.io/core-operations:focus-primary-editor',
+      'operation::@bangle.io/core-extension:focus-primary-editor',
     );
 
-    await waitForEditorFocus(page, 0, { wsPath });
+    await waitForEditorFocus(page, PRIMARY_EDITOR_INDEX, { wsPath });
 
     // let editor flush out changes or it will block reload
     await longSleep(700);
 
     await page.reload({ waitUntil: 'networkidle' });
 
-    await waitForEditorFocus(page, 0);
+    await waitForEditorFocus(page, PRIMARY_EDITOR_INDEX);
   });
 });

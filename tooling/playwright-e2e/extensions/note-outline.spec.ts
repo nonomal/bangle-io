@@ -1,5 +1,8 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
 
+import { PRIMARY_EDITOR_INDEX } from '@bangle.io/constants';
+
+import { withBangle as test } from '../fixture-with-bangle';
 import {
   clearEditor,
   createNewNote,
@@ -8,17 +11,17 @@ import {
   waitForEditorFocus,
 } from '../helpers';
 
-test.beforeEach(async ({ page, baseURL }, testInfo) => {
-  await page.goto(baseURL!, { waitUntil: 'networkidle' });
+test.beforeEach(async ({ bangleApp }, testInfo) => {
+  await bangleApp.open();
 });
 
 test('shows note sidebar correctly', async ({ page }) => {
   const wsName = await createWorkspace(page);
 
   await createNewNote(page, wsName, 'test123');
-  await waitForEditorFocus(page, 0);
+  await waitForEditorFocus(page, PRIMARY_EDITOR_INDEX);
 
-  await clearEditor(page, 0);
+  await clearEditor(page, PRIMARY_EDITOR_INDEX);
   await page.keyboard.type('## top heading');
   await page.keyboard.press('Enter');
   await page.keyboard.type('### child heading');
@@ -26,7 +29,7 @@ test('shows note sidebar correctly', async ({ page }) => {
 
   await runOperation(
     page,
-    'operation::@bangle.io/core-operations:NOTE_TOGGLE_SIDEBAR',
+    'operation::@bangle.io/core-extension:NOTE_TOGGLE_SIDEBAR',
   );
 
   await expect(

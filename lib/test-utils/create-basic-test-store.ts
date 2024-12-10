@@ -1,154 +1,100 @@
-import { WorkspaceTypeBrowser } from '@bangle.io/constants';
-import {
-  ApplicationStore,
-  BaseAction,
-  Slice,
-  SliceKey,
-} from '@bangle.io/create-store';
-import {
-  Extension,
-  extensionRegistrySlice,
-} from '@bangle.io/extension-registry';
-import { notificationSlice } from '@bangle.io/slice-notification';
-import { pageSlice } from '@bangle.io/slice-page';
-import {
-  createNote,
-  createWorkspace,
-  listWorkspaces,
-  workspaceSlice,
-} from '@bangle.io/slice-workspace';
-import {
-  BaseStorageProvider,
-  IndexedDbStorageProvider,
-} from '@bangle.io/storage';
-import { asssertNotUndefined, sleep } from '@bangle.io/utils';
+import waitForExpect from 'wait-for-expect';
 
+import { WorkspaceType } from '@bangle.io/constants';
+import type { ApplicationStore, BaseAction } from '@bangle.io/create-store';
+// import type { BangleApplicationStore } from '@bangle.io/shared-types';
+// import {
+//   createNote,
+//   createWorkspace,
+//   getWsName,
+//   workspaceSliceKey,
+// } from '@bangle.io/slice-workspace';
+import { assertNotUndefined, sleep } from '@bangle.io/utils';
+import { readAllWorkspacesInfo } from '@bangle.io/workspace-info';
+
+import { createBasicStore } from './create-basic-store';
 import { createPMNode } from './create-pm-node';
-import { createTestStore } from './create-test-store';
-import { createExtensionRegistry } from './extension-registry';
-import { clearFakeIdb } from './fake-idb';
-import * as idbHelpers from './indexedb-ws-helpers';
-import { testMemoryHistorySlice } from './test-memory-history-slice';
 
 if (typeof jest === 'undefined') {
-  throw new Error('Can only be with jest');
+  console.warn('test-utils not using with jest');
 }
 
-// A batteries included store meant for testing
-// It includes the default slices, routing, extension registry
+// a wrapper around createBasicStore but with jest helpers for easier testing
 export function createBasicTestStore<
   SL = any,
   A extends BaseAction = any,
   S = SL,
   C extends { [key: string]: any } = any,
->({
-  slices = [],
-  extensions = [],
-  useMemoryHistorySlice = true,
-  useEditorCoreExtension = true,
-  // slice key purely for getting the types of the store correct
-  sliceKey,
-  scheduler,
-  opts,
-  onError,
-  storageProvider = new IndexedDbStorageProvider(),
-}: {
-  storageProvider?: BaseStorageProvider;
-  scheduler?: any;
-  // for getting the types right
-  sliceKey?: SliceKey<SL, A, S, C>;
-  slices?: Slice[];
-  extensions?: Extension[];
-  useMemoryHistorySlice?: boolean;
-  useEditorCoreExtension?: boolean;
-  onError?: ApplicationStore<SL, A>['onError'];
-  opts?: any;
-} = {}) {
-  let extensionRegistry = createExtensionRegistry(
-    [
-      Extension.create({
-        name: 'test-extension',
-        application: {
-          storageProvider: storageProvider,
-          onStorageError: () => false,
-        },
-      }),
-      ...extensions,
-    ],
-    {
-      editorCore: useEditorCoreExtension,
-    },
-  );
+>(param: Parameters<typeof createBasicStore<SL, A, S, C>>[0]) {
+  const { store, actionsDispatched, extensionRegistry } =
+    createBasicStore(param);
 
-  const { store, actionsDispatched, dispatchSpy, getActionNames, getAction } =
-    createTestStore({
-      sliceKey,
-      scheduler,
-      onError,
-      slices: [
-        extensionRegistrySlice(),
-        useMemoryHistorySlice ? testMemoryHistorySlice() : undefined,
-        pageSlice(),
-        workspaceSlice(),
-        notificationSlice(),
-        ...slices,
-      ].filter((r): r is Slice => Boolean(r)),
-      opts: {
-        extensionRegistry,
-        ...opts,
-      },
-    });
+  const getAction = (name: string | RegExp) => {
+    return getActionsDispatched(dispatchSpy, name);
+  };
+
+  const dispatchSpy = jest.spyOn(store, 'dispatch');
 
   return {
     extensionRegistry,
     store,
     actionsDispatched,
-    dispatchSpy,
-    getActionNames,
+    getWsName: () => {
+      // @ts-expect-error
+      return getWsName()(store.state as any);
+    },
+    // if user editor, checks if editor is ready to be edited
+    isEditorCollabReady: async (editorIndex: number) => {
+      // const editor = editorManagerSliceKey.callQueryOp(
+      //   store.state,
+      //   getEditor(editorIndex),
+      // );
+      // await waitForExpect(() =>
+      //   expect(
+      //     editor?.view.dom.classList.contains('bangle-collab-active'),
+      //   ).toBe(true),
+      // );
+    },
+    editorReadyActionsCount: () => {
+      return getAction('action::@bangle.io/slice-editor-manager:set-editor')
+        .length;
+    },
+    getActionNames: () => {
+      return getActionNamesDispatched(dispatchSpy);
+    },
     getAction,
+    dispatchSpy,
   };
 }
 
-export const jestHooks = {
-  beforeEach: () => {
-    idbHelpers.beforeEachHook();
-  },
-  afterEach: () => {
-    idbHelpers.afterEachHook();
-    clearFakeIdb();
-  },
-};
-
 export async function setupMockWorkspaceWithNotes(
-  store?: ApplicationStore,
+  store: ApplicationStore,
   wsName = 'test-ws-1',
   // Array of [wsPath, MarkdownString]
-  noteWsPaths: [string, string][] = [
+  noteWsPaths: Array<[string, string]> = [
     [`${wsName}:one.md`, `# Hello World 0`],
     [`${wsName}:two.md`, `# Hello World 1`],
   ],
   destroyAfterInit = false,
+  storageProvider: string = WorkspaceType.Browser,
 ) {
-  if (!store) {
-    store = createBasicTestStore().store;
-  }
-  if (
-    (await listWorkspaces()(store.state, store.dispatch, store)).find(
-      (r) => r.name === wsName,
-    )
-  ) {
+  if ((await readAllWorkspacesInfo()).find((r) => r.name === wsName)) {
     throw new Error(`Workspace ${wsName} already exists`);
   }
-
-  await createWorkspace(wsName, WorkspaceTypeBrowser)(
+  // @ts-expect-error
+  await createWorkspace(wsName, storageProvider)(
     store.state,
     store.dispatch,
     store,
   );
 
-  await sleep(0);
+  await waitForExpect(() => {
+    // @ts-expect-error
+    expect(getWsName()(store.state)).toBe(wsName);
+  });
 
   for (const [noteWsPath, str] of noteWsPaths) {
+    // @ts-expect-error
     await createNote(noteWsPath, {
       doc: createPMNode([], str.trim()),
     })(store.state, store.dispatch, store);
@@ -160,16 +106,52 @@ export async function setupMockWorkspaceWithNotes(
     store.destroy();
   }
 
+  await waitForExpect(() => {
+    expect(
+      // @ts-expect-error
+      workspaceSliceKey.getSliceStateAsserted(store.state).wsPaths?.length,
+    ).toBe(noteWsPaths.length);
+  });
+
   return {
     wsName,
     noteWsPaths,
     store,
     createTestNote: async (wsPath: string, str: string, open: boolean) => {
-      asssertNotUndefined(store, 'store must be defined');
+      assertNotUndefined(store, 'store must be defined');
+      // @ts-expect-error
       await createNote(wsPath, {
         open,
         doc: createPMNode([], str.trim()),
       })(store.state, store.dispatch, store);
+
+      let set = new Set(noteWsPaths.map((r) => r[0]));
+      set.add(wsPath);
+
+      await waitForExpect(() => {
+        expect(
+          // @ts-expect-error
+          workspaceSliceKey.getSliceStateAsserted(store.state).wsPaths?.length,
+        ).toBe(set.size);
+      });
     },
   };
 }
+
+export const getActionNamesDispatched = (mockDispatch: jest.SpyInstance) =>
+  mockDispatch.mock.calls.map((r) => r[0].name);
+
+export const getActionsDispatched = (
+  mockDispatch: jest.SpyInstance,
+  name: string | RegExp,
+) => {
+  const actions = mockDispatch.mock.calls.map((r) => r[0]);
+
+  if (name) {
+    return actions.filter((r) =>
+      name instanceof RegExp ? name.test(r.name) : r.name === name,
+    );
+  }
+
+  return actions;
+};

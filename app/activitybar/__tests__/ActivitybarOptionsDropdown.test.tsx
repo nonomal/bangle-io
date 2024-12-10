@@ -1,24 +1,26 @@
 /**
- * @jest-environment jsdom
+ * @jest-environment @bangle.io/jsdom-env
  */
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import React from 'react';
 
+import { useSerialOperationContext } from '@bangle.io/api';
 import { CORE_PALETTES_TOGGLE_WORKSPACE_PALETTE } from '@bangle.io/constants';
-import { newNote } from '@bangle.io/shared-operations';
 
 import { ActivitybarOptionsDropdown } from '../ActivitybarOptionsDropdown';
 
-jest.mock('@bangle.io/shared-operations', () => {
-  const operations = jest.requireActual('@bangle.io/shared-operations');
+jest.mock('@bangle.io/api', () => {
+  const rest = jest.requireActual('@bangle.io/api');
 
   return {
-    ...operations,
-    newNote: jest.fn(() => () => {}),
+    ...rest,
+    useSerialOperationContext: jest.fn(() => ({})),
   };
 });
+
 jest.mock('react-dom', () => {
   const otherThings = jest.requireActual('react-dom');
+
   return {
     ...otherThings,
     createPortal: jest.fn((element, node) => {
@@ -31,10 +33,17 @@ const operationKeybindings = {
   [CORE_PALETTES_TOGGLE_WORKSPACE_PALETTE]: 'Ctrl-P',
 };
 
-let newNoteMock = newNote as jest.MockedFunction<typeof newNote>;
+let useSerialOperationContextMock =
+  useSerialOperationContext as jest.MockedFunction<
+    typeof useSerialOperationContext
+  >;
 
+let dispatchSerialOperationMock = jest.fn();
 beforeEach(() => {
-  newNoteMock.mockImplementation(() => () => {});
+  dispatchSerialOperationMock = jest.fn();
+  useSerialOperationContextMock.mockImplementation(() => {
+    return { dispatchSerialOperation: dispatchSerialOperationMock };
+  });
 });
 
 test('renders correctly', () => {
@@ -43,6 +52,19 @@ test('renders correctly', () => {
       <ActivitybarOptionsDropdown
         operationKeybindings={operationKeybindings}
         widescreen={true}
+      />
+    </div>,
+  );
+
+  expect(result.container).toMatchSnapshot();
+});
+
+test('renders mobile correctly', () => {
+  let result = render(
+    <div>
+      <ActivitybarOptionsDropdown
+        operationKeybindings={operationKeybindings}
+        widescreen={false}
       />
     </div>,
   );
@@ -82,10 +104,6 @@ test('clicking the button shows dropdown', async () => {
 });
 
 test('clicking items in dropdown dispatches event', async () => {
-  const dispatch = jest.fn();
-
-  newNoteMock.mockImplementation(() => dispatch);
-
   let result = render(
     <div>
       <ActivitybarOptionsDropdown
@@ -108,5 +126,5 @@ test('clicking items in dropdown dispatches event', async () => {
     fireEvent.click(targetOption);
   });
 
-  expect(dispatch).toBeCalledTimes(1);
+  expect(dispatchSerialOperationMock).toBeCalledTimes(1);
 });

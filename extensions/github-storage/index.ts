@@ -1,158 +1,148 @@
-import { Extension } from '@bangle.io/extension-registry';
-import {
-  ErrorCode as RemoteSyncErrorCode,
-  ErrorCodeType as RemoteFileSyncErrorCodeType,
-} from '@bangle.io/remote-file-sync';
-import {
-  showNotification,
-  uncaughtExceptionNotification,
-} from '@bangle.io/slice-notification';
-import { isIndexedDbException } from '@bangle.io/storage';
+import React from 'react';
+
+import { Extension, getExtensionStore, nsmApi2 } from '@bangle.io/api';
+import { GithubIcon } from '@bangle.io/ui-components';
 
 import {
-  OPERATION_NEW_GITUB_WORKSPACE,
+  CONFLICT_DIALOG,
+  DISCARD_LOCAL_CHANGES_DIALOG,
+  NEW_GITHUB_WORKSPACE_REPO_PICKER_DIALOG,
+  NEW_GITHUB_WORKSPACE_TOKEN_DIALOG,
+  OPERATION_DISCARD_LOCAL_CHANGES,
+  OPERATION_OPTIMIZE_GITHUB_STORAGE,
+  OPERATION_SHOW_CONFLICT_DIALOG,
+  OPERATION_SYNC_GITHUB_CHANGES,
   OPERATION_UPDATE_GITHUB_TOKEN,
+  UPDATE_GITHUB_TOKEN_DIALOG,
 } from './common';
-import { Router } from './components/Router';
-import {
-  ErrorCodesType,
-  GITHUB_API_ERROR,
-  GITHUB_STORAGE_NOT_ALLOWED,
-  INVALID_GITHUB_FILE_FORMAT,
-  INVALID_GITHUB_RESPONSE,
-  INVALID_GITHUB_TOKEN,
-} from './errors';
+import { ConflictDialog } from './components/ConfllictDialog';
+import { DiscardLocalChangesDialog } from './components/DiscardLocalChangesDialog';
+import { GithubSidebar } from './components/GithubSidebar';
+import { NewGithubWorkspaceTokenDialog } from './components/NewGithubWorkspaceDialog';
+import { NewGithubWorkspaceRepoPickerDialog } from './components/NewGithubWorkspaceRepoPickerDialog';
+import { UpdateTokenDialog } from './components/UpdateTokenDialog';
+import { handleError } from './error-handling';
 import { GithubStorageProvider } from './github-storage-provider';
+import { githubEffects, nsmGhSlice, operations } from './state';
 
 const extensionName = '@bangle.io/github-storage';
 
 const extension = Extension.create({
   name: extensionName,
   application: {
-    ReactComponent: Router,
-    slices: [],
+    nsmSlices: [nsmGhSlice],
+    nsmEffects: githubEffects,
     storageProvider: new GithubStorageProvider(),
-    onStorageError: (error, store) => {
-      const errorCode = error.code as
-        | ErrorCodesType
-        | RemoteFileSyncErrorCodeType;
+    dialogs: [
+      {
+        name: DISCARD_LOCAL_CHANGES_DIALOG,
+        ReactComponent: DiscardLocalChangesDialog,
+      },
+      {
+        name: NEW_GITHUB_WORKSPACE_TOKEN_DIALOG,
+        ReactComponent: NewGithubWorkspaceTokenDialog,
+      },
+      {
+        name: NEW_GITHUB_WORKSPACE_REPO_PICKER_DIALOG,
+        ReactComponent: NewGithubWorkspaceRepoPickerDialog,
+      },
+      {
+        name: UPDATE_GITHUB_TOKEN_DIALOG,
+        ReactComponent: UpdateTokenDialog,
+      },
+      {
+        name: CONFLICT_DIALOG,
+        ReactComponent: ConflictDialog,
+      },
+    ],
+    sidebars: [
+      {
+        title: 'Github sync',
+        name: 'sidebar::@bangle.io/github-storage:sidebar',
+        ReactComponent: GithubSidebar,
+        activitybarIcon: React.createElement(GithubIcon, {}),
+        hint: 'Sync your local workspace with Github',
+        activitybarIconShow(wsName) {
+          const store = getExtensionStore(nsmGhSlice).state;
+          const ghWsName = nsmGhSlice.get(store).githubWsName;
 
-      if (isIndexedDbException(error)) {
-        console.debug(error.code, error.name);
-        showNotification({
-          severity: 'error',
-          title: 'Error writing to browser storage',
-          content: error.message,
-          uid: error.code + Math.random(),
-        })(store.state, store.dispatch);
-        return true;
-      }
-
-      switch (errorCode) {
-        case GITHUB_API_ERROR: {
-          if (error.message.includes('Bad credentials')) {
-            showNotification({
-              severity: 'error',
-              title: 'Bad Github credentials',
-              content:
-                'Please check your Github token has correct permissions and try again.',
-              uid: `github-storage-error-${errorCode}`,
-              buttons: [
-                {
-                  title: 'Update token',
-                  hint: `Update your Github token`,
-                  operation: OPERATION_UPDATE_GITHUB_TOKEN,
-                },
-              ],
-            })(store.state, store.dispatch);
-
-            break;
-          }
-          showNotification({
-            severity: 'error',
-            title: 'Github API error',
-            content: error.message,
-            uid: `github-storage-error-${errorCode}`,
-          })(store.state, store.dispatch);
-          break;
-        }
-        case INVALID_GITHUB_FILE_FORMAT: {
-          showNotification({
-            severity: 'error',
-            title: 'Invalid file format',
-            content: error.message,
-            uid: `github-file-format`,
-          })(store.state, store.dispatch);
-          break;
-        }
-        case INVALID_GITHUB_TOKEN: {
-          showNotification({
-            severity: 'error',
-            title: 'Github token is invalid',
-            content: error.message,
-            uid: 'Invalid github token',
-          })(store.state, store.dispatch);
-          break;
-        }
-
-        case INVALID_GITHUB_RESPONSE: {
-          showNotification({
-            severity: 'error',
-            title: 'Received invalid response from Github',
-            content: error.message,
-            uid: INVALID_GITHUB_RESPONSE,
-          })(store.state, store.dispatch);
-          break;
-        }
-
-        case GITHUB_STORAGE_NOT_ALLOWED: {
-          showNotification({
-            severity: 'error',
-            title: 'Not allowed',
-            content: error.message,
-            uid: GITHUB_STORAGE_NOT_ALLOWED + error.message,
-          })(store.state, store.dispatch);
-          break;
-        }
-
-        case RemoteSyncErrorCode.REMOTE_SYNC_NOT_ALLOWED_ERROR: {
-          showNotification({
-            severity: 'error',
-            title: 'Not allowed',
-            content: error.message,
-            uid:
-              RemoteSyncErrorCode.REMOTE_SYNC_NOT_ALLOWED_ERROR + error.message,
-          })(store.state, store.dispatch);
-          break;
-        }
-
-        default: {
-          // hack to catch switch slipping
-          let val: never = errorCode;
-
-          console.error(error);
-          uncaughtExceptionNotification(error)(store.state, store.dispatch);
-
-          return false;
-        }
-      }
-
-      return true;
+          return ghWsName ? ghWsName === wsName : false;
+        },
+      },
+    ],
+    onStorageError: (error) => {
+      return handleError(error);
     },
     operations: [
-      {
-        name: OPERATION_NEW_GITUB_WORKSPACE,
-        title: 'Github: New READONLY workspace (Experimental)',
-      },
       {
         name: OPERATION_UPDATE_GITHUB_TOKEN,
         title: 'Github: Update personal access token',
       },
+      {
+        name: OPERATION_SYNC_GITHUB_CHANGES,
+        title: 'Github: Sync changes',
+      },
+      {
+        name: OPERATION_DISCARD_LOCAL_CHANGES,
+        title: 'Github: Discard local changes',
+      },
+      {
+        name: OPERATION_SHOW_CONFLICT_DIALOG,
+        title: 'Github: Show conflicted files',
+      },
+      {
+        name: OPERATION_OPTIMIZE_GITHUB_STORAGE,
+        title: 'Github: Optimize storage',
+      },
     ],
     operationHandler() {
       return {
-        handle(operation, payload, store) {
+        handle(operation, payload) {
           switch (operation.name) {
+            case OPERATION_SYNC_GITHUB_CHANGES: {
+              const { wsName } = nsmApi2.workspace.workspaceState();
+
+              if (!wsName) {
+                return false;
+              }
+
+              getExtensionStore(nsmGhSlice).dispatch(
+                operations.syncRunner(new AbortController().signal, true),
+              );
+
+              return true;
+            }
+
+            case OPERATION_DISCARD_LOCAL_CHANGES: {
+              nsmApi2.ui.showDialog({
+                dialogName: DISCARD_LOCAL_CHANGES_DIALOG,
+              });
+
+              return true;
+            }
+
+            case OPERATION_UPDATE_GITHUB_TOKEN: {
+              nsmApi2.ui.showDialog({ dialogName: UPDATE_GITHUB_TOKEN_DIALOG });
+
+              return true;
+            }
+
+            case OPERATION_SHOW_CONFLICT_DIALOG: {
+              nsmApi2.ui.showDialog({ dialogName: CONFLICT_DIALOG });
+
+              return true;
+            }
+
+            case OPERATION_OPTIMIZE_GITHUB_STORAGE: {
+              getExtensionStore(nsmGhSlice).dispatch(
+                operations.optimizeDatabaseOperation(
+                  true,
+                  new AbortController().signal,
+                ),
+              );
+
+              return true;
+            }
             default: {
               return false;
             }

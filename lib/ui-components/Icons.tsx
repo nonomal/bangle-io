@@ -1,5 +1,8 @@
 import React from 'react';
 
+import { vars } from '@bangle.io/css-vars';
+import { cx } from '@bangle.io/utils';
+
 export const Svg = ({
   children,
   style = {},
@@ -14,9 +17,10 @@ export const Svg = ({
 } & React.SVGProps<SVGSVGElement>) => (
   <svg
     style={style}
+    fill="currentColor"
     viewBox="0 0 24 24"
     xmlns="http://www.w3.org/2000/svg"
-    className={`fill-current ${size ? `h-${size} w-${size}` : ''} ${className}`}
+    className={`${size ? `h-${size} w-${size}` : ''} ${className}`}
     {...props}
   >
     {children}
@@ -29,6 +33,15 @@ export const ChevronDownIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </Svg>
 );
 
+export const ChevronUpIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <Svg {...props}>
+    <path
+      d="M17.657 16.243l1.414-1.414-7.07-7.072-7.072 7.072 1.414 1.414L12 10.586l5.657 5.657z"
+      fill="currentColor"
+    />
+  </Svg>
+);
+
 export const CloseIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <Svg {...props}>
     <path
@@ -38,6 +51,22 @@ export const CloseIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </Svg>
 );
 
+export const ArrowsExpand = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth={2}
+    {...props}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+    />
+  </svg>
+);
 export function TerminalIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <Svg {...props}>
@@ -221,7 +250,8 @@ export function MenuIcon(props: React.SVGProps<SVGSVGElement>) {
 export function SpinnerIcon({ className = '', ...props }) {
   return (
     <svg
-      className={'spinner-icon ' + className}
+      aria-label="search spinner"
+      className={'B-ui-components_spinner-icon ' + className}
       viewBox="0 0 100 100"
       xmlns="http://www.w3.org/2000/svg"
       stroke="currentColor"
@@ -368,7 +398,7 @@ export function SingleCharIcon({ char, ...props }: { char: string } & any) {
       stroke="currentColor"
       {...props}
     >
-      <circle r="11" cx="12" cy="12" strokeWidth="1" style={{ fill: 'none' }} />
+      <circle r="11" cx="12" cy="12" strokeWidth="2" style={{ fill: 'none' }} />
       <text
         alignmentBaseline="central"
         x="50%"
@@ -471,7 +501,7 @@ export function GiftIcon({ showDot = false, ...props }) {
       {showDot && (
         <circle
           cx="21"
-          style={{ fill: 'var(--accent-primary-0)' }}
+          style={{ fill: vars.color.promote.solidStrong }}
           cy="3"
           r="3"
           strokeWidth={0}
@@ -491,6 +521,19 @@ export function SettingsIcon(props: any) {
     >
       <rect fill="#ff13dc" opacity="0" width="18" height="18" />
       <path d="M16.45,7.8965H14.8945a5.97644,5.97644,0,0,0-.921-2.2535L15.076,4.54a.55.55,0,0,0,.00219-.77781L15.076,3.76l-.8365-.836a.55.55,0,0,0-.77781-.00219L13.4595,2.924,12.357,4.0265a5.96235,5.96235,0,0,0-2.2535-.9205V1.55a.55.55,0,0,0-.55-.55H8.45a.55.55,0,0,0-.55.55V3.106a5.96235,5.96235,0,0,0-2.2535.9205l-1.1-1.1025a.55.55,0,0,0-.77781-.00219L3.7665,2.924,2.924,3.76a.55.55,0,0,0-.00219.77781L2.924,4.54,4.0265,5.643a5.97644,5.97644,0,0,0-.921,2.2535H1.55a.55.55,0,0,0-.55.55V9.55a.55.55,0,0,0,.55.55H3.1055a5.967,5.967,0,0,0,.921,2.2535L2.924,13.4595a.55.55,0,0,0-.00219.77782l.00219.00218.8365.8365a.55.55,0,0,0,.77781.00219L4.5405,15.076,5.643,13.9735a5.96235,5.96235,0,0,0,2.2535.9205V16.45a.55.55,0,0,0,.55.55H9.55a.55.55,0,0,0,.55-.55V14.894a5.96235,5.96235,0,0,0,2.2535-.9205L13.456,15.076a.55.55,0,0,0,.77782.00219L14.236,15.076l.8365-.8365a.55.55,0,0,0,.00219-.77781l-.00219-.00219L13.97,12.357a5.967,5.967,0,0,0,.921-2.2535H16.45a.55.55,0,0,0,.55-.55V8.45a.55.55,0,0,0-.54649-.55349ZM11.207,9A2.207,2.207,0,1,1,9,6.793H9A2.207,2.207,0,0,1,11.207,9Z" />
+    </svg>
+  );
+}
+
+export function DotsVerticalIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+      viewBox="0 0 20 20"
+      fill="currentColor"
+    >
+      <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
     </svg>
   );
 }
@@ -587,6 +630,7 @@ export function MoreIcon(props: any) {
     </svg>
   );
 }
+
 export function MoreSmallListIcon(props: any) {
   return (
     <svg
@@ -611,6 +655,7 @@ export function TwitterIcon(props: any) {
     </svg>
   );
 }
+
 export function DiscordIcon(props: any) {
   return (
     <svg
@@ -691,6 +736,45 @@ export function BangleIcon(props: any) {
         d="M191.86 195.27c24.29-24.72 40.6-53.21 47.17-79.5 6.54-26.17 3.6-51.14-12.26-67.28-15.85-16.14-40.39-19.14-66.1-12.48-25.83 6.7-53.83 23.3-78.12 48.01-24.28 24.72-40.6 53.21-47.17 79.5-6.54 26.17-3.59 51.14 12.27 67.28 15.85 16.13 40.38 19.13 66.1 12.48 25.83-6.7 53.83-23.3 78.11-48.01Z"
         stroke="#000"
         strokeWidth="10"
+      ></path>
+    </svg>
+  );
+}
+
+export function GithubIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      {...props}
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 64 64"
+    >
+      <path d="M32 6C17.641 6 6 17.641 6 32c0 12.277 8.512 22.56 19.955 25.286-.592-.141-1.179-.299-1.755-.479V50.85c0 0-.975.325-2.275.325-3.637 0-5.148-3.245-5.525-4.875-.229-.993-.827-1.934-1.469-2.509-.767-.684-1.126-.686-1.131-.92-.01-.491.658-.471.975-.471 1.625 0 2.857 1.729 3.429 2.623 1.417 2.207 2.938 2.577 3.721 2.577.975 0 1.817-.146 2.397-.426.268-1.888 1.108-3.57 2.478-4.774-6.097-1.219-10.4-4.716-10.4-10.4 0-2.928 1.175-5.619 3.133-7.792C19.333 23.641 19 22.494 19 20.625c0-1.235.086-2.751.65-4.225 0 0 3.708.026 7.205 3.338C28.469 19.268 30.196 19 32 19s3.531.268 5.145.738c3.497-3.312 7.205-3.338 7.205-3.338.567 1.474.65 2.99.65 4.225 0 2.015-.268 3.19-.432 3.697C46.466 26.475 47.6 29.124 47.6 32c0 5.684-4.303 9.181-10.4 10.4 1.628 1.43 2.6 3.513 2.6 5.85v8.557c-.576.181-1.162.338-1.755.479C49.488 54.56 58 44.277 58 32 58 17.641 46.359 6 32 6zM33.813 57.93C33.214 57.972 32.61 58 32 58 32.61 58 33.213 57.971 33.813 57.93zM37.786 57.346c-1.164.265-2.357.451-3.575.554C35.429 57.797 36.622 57.61 37.786 57.346zM32 58c-.61 0-1.214-.028-1.813-.07C30.787 57.971 31.39 58 32 58zM29.788 57.9c-1.217-.103-2.411-.289-3.574-.554C27.378 57.61 28.571 57.797 29.788 57.9z" />
+    </svg>
+  );
+}
+
+export function LoadingCircleIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      className={cx('animate-spin', props.className)}
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      ></circle>
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
       ></path>
     </svg>
   );

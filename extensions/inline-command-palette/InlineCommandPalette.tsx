@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import reactDOM from 'react-dom';
 
-import { EditorView } from '@bangle.dev/pm';
+import type { EditorView } from '@bangle.dev/pm';
 import { useEditorViewContext } from '@bangle.dev/react';
 
 import {
@@ -42,6 +42,7 @@ function getItemsAndHints(
   isItemDisabled: (item: PaletteItem) => boolean,
 ) {
   let items = [...timestampItems, ...editorItems];
+
   if (!items.every((item) => item instanceof PaletteItem)) {
     throw new Error(
       `uid: "${
@@ -85,8 +86,10 @@ function getItemsAndHints(
       if (a.group === b.group) {
         return a.title.localeCompare(b.title);
       }
+
       return a.group.localeCompare(b.group);
     });
+
   return { items, hintItems };
 }
 
@@ -143,8 +146,8 @@ export function InlineCommandPalette() {
   );
 
   return reactDOM.createPortal(
-    <div className="inline-palette-wrapper shadow-2xl">
-      <div className="inline-palette-items-wrapper">
+    <div className="B-ui-components_inline-palette-wrapper flex flex-col bg-colorNeutralBgLayerFloat shadow-2xl">
+      <div className="B-ui-components_inline-palette-items-wrapper">
         {items.map((item, i) => {
           return (
             <InlinePaletteRow
@@ -228,11 +231,13 @@ function queryMatch<
 
 function strMatch(a: string[] | string, b: string): boolean {
   b = b.toLocaleLowerCase();
+
   if (Array.isArray(a)) {
     return a.filter(Boolean).some((str) => strMatch(str, b));
   }
 
   a = a.toLocaleLowerCase();
+
   return a.includes(b) || b.includes(a);
 }
 

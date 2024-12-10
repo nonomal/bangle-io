@@ -1,27 +1,25 @@
 /**
- * @jest-environment jsdom
+ * @jest-environment @bangle.io/jsdom-env
  */
 import { act, render, waitFor } from '@testing-library/react';
 import { renderHook } from '@testing-library/react-hooks';
 import React from 'react';
 
-import { BangleEditor } from '@bangle.dev/core';
-import { Node, Selection } from '@bangle.dev/pm';
+import { Selection } from '@bangle.dev/pm';
 
-import { initialBangleStore } from '@bangle.io/bangle-store-context';
-import { EditorDisplayType } from '@bangle.io/constants';
-import { useExtensionRegistryContext } from '@bangle.io/extension-registry';
 import {
-  getInitialSelection,
-  setEditorReady,
-  setEditorUnmounted,
-  useEditorManagerContext,
-} from '@bangle.io/slice-editor-manager';
-import { getNote, useWorkspaceContext } from '@bangle.io/slice-workspace';
+  EditorDisplayType,
+  PRIMARY_EDITOR_INDEX,
+  SECONDARY_EDITOR_INDEX,
+} from '@bangle.io/constants';
+import type { EditorIdType } from '@bangle.io/slice-editor-manager';
+import { getEditor, getEditorView } from '@bangle.io/slice-editor-manager';
 import {
+  createBasicTestStore,
   createExtensionRegistry,
   createPMNode,
-  getUseEditorManagerContextReturn,
+  setupMockWorkspaceWithNotes,
+  TestStoreProvider,
 } from '@bangle.io/test-utils';
 
 import { Editor, useGetEditorState } from '../Editor';
@@ -30,224 +28,263 @@ const extensionRegistry = createExtensionRegistry([], {
   editorCore: true,
 });
 
-jest.mock('@bangle.io/slice-workspace', () => {
-  const actual = jest.requireActual('@bangle.io/slice-workspace');
-  return {
-    ...actual,
-    useWorkspaceContext: jest.fn(),
-    getNote: jest.fn(() => async () => {}),
-  };
-});
-
-jest.mock('@bangle.io/slice-editor-manager', () => {
-  const actual = jest.requireActual('@bangle.io/slice-editor-manager');
-  return {
-    ...actual,
-    getInitialSelection: jest.fn(() => () => {}),
-    setEditorReady: jest.fn(() => () => {}),
-    setEditorUnmounted: jest.fn(() => () => {}),
-    useEditorManagerContext: jest.fn(),
-  };
-});
-
-let useEditorManagerContextMock =
-  useEditorManagerContext as jest.MockedFunction<
-    typeof useEditorManagerContext
-  >;
-
-jest.mock('@bangle.io/extension-registry', () => {
-  const actual = jest.requireActual('@bangle.io/extension-registry');
-  return {
-    ...actual,
-    useExtensionRegistryContext: jest.fn(),
-  };
-});
-
-const generateDoc = (text = 'Hello world! I am a test') =>
-  Node.fromJSON(extensionRegistry.specRegistry.schema, {
-    type: 'doc',
-    content: [
-      {
-        type: 'heading',
-        attrs: {
-          level: 1,
-        },
-        content: [
-          {
-            type: 'text',
-            text: 'Hola',
-          },
-        ],
-      },
-      {
-        type: 'paragraph',
-        content: [
-          {
-            type: 'text',
-            text,
-          },
-        ],
-      },
-    ],
-  });
-
-let getNoteMock = jest
-  .mocked(getNote)
-  .mockImplementation(() => async () => testDocNode);
-
 let result: ReturnType<typeof render>;
 
-const testDocNode = generateDoc();
+const ONE_DOC_CONTENT = `Hello world! I am a test`;
+const TWO_DOC_CONTENT = `bubble gum`;
+const wsName = 'test-ws';
+
 beforeEach(() => {
-  (useWorkspaceContext as any).mockImplementation(() => {
-    return {
-      bangleStore: { state: {}, dispatch: jest.fn() },
-    };
-  });
-
-  (useExtensionRegistryContext as any).mockImplementation(() => {
-    return extensionRegistry;
-  });
-
-  useEditorManagerContextMock.mockImplementation(() => {
-    return {
-      ...getUseEditorManagerContextReturn,
-    };
-  });
+  jest.useRealTimers();
 });
 
+const setup = async () => {
+  const noteWsPaths: Array<[string, string]> = [
+    [`${wsName}:one.md`, ONE_DOC_CONTENT],
+    [`${wsName}:two.md`, TWO_DOC_CONTENT],
+  ];
+
+  const { store } = createBasicTestStore({
+    useEditorManagerSlice: true,
+    useUISlice: true,
+  });
+  await setupMockWorkspaceWithNotes(store, wsName, noteWsPaths);
+
+  return { store };
+};
+
 test('basic renders', async () => {
-  act(() => {
+  const { store: bangleStore } = await setup();
+
+  await act(async () => {
     result = render(
-      <div>
+      <TestStoreProvider bangleStore={bangleStore} bangleStoreChanged={0}>
         <Editor
-          editorId={1}
-          wsPath="something:blah.md"
+          editorId={SECONDARY_EDITOR_INDEX}
+          wsPath="test-ws:one.md"
           className="test-class"
+          extensionRegistry={extensionRegistry}
         />
-      </div>,
+      </TestStoreProvider>,
     );
+  });
+
+  await waitFor(() => {
+    expect(result!.container.innerHTML).toContain(ONE_DOC_CONTENT);
   });
 
   await waitFor(() => {
     expect(result.container.innerHTML).toContain('class="test-class');
   });
 
-  expect(result!.container.innerHTML).toContain('Hello world! I am a test');
+  expect(result!.container.innerHTML).toContain(ONE_DOC_CONTENT);
   expect(result!.container).toMatchSnapshot();
 });
 
-test('calls getInitialSelection correctly', async () => {
-  act(() => {
+test('persists editor selection', async () => {
+  const setSelectionAtEnd = (editorId: EditorIdType) => {
+    const view = getEditorView(editorId)(bangleStore.state)!;
+    view.dispatch(view.state.tr.setSelection(Selection.atEnd(view.state.doc)));
+  };
+
+  const getEditorSelection = (editorId: EditorIdType) => {
+    const view = getEditorView(editorId)(bangleStore.state)!;
+
+    return view.state.selection.toJSON();
+  };
+
+  const { store: bangleStore } = await setup();
+
+  await act(async () => {
     result = render(
-      <div>
+      <TestStoreProvider bangleStore={bangleStore} bangleStoreChanged={0}>
         <Editor
-          editorId={1}
-          wsPath="something:blah.md"
-          className="test-class"
+          editorId={SECONDARY_EDITOR_INDEX}
+          wsPath="test-ws:one.md"
+          className="test-class1"
+          extensionRegistry={extensionRegistry}
         />
-      </div>,
+      </TestStoreProvider>,
     );
   });
 
   await waitFor(() => {
-    expect(result.container.innerHTML).toContain('class="test-class');
+    expect(result!.container.innerHTML).toContain(ONE_DOC_CONTENT);
   });
 
-  expect(getInitialSelection).toBeCalledTimes(1);
-  expect(getInitialSelection).nthCalledWith(
-    1,
-    1,
-    'something:blah.md',
-    testDocNode,
-  );
+  expect(getEditorSelection(SECONDARY_EDITOR_INDEX)).toEqual({
+    anchor: 1,
+    head: 1,
+    type: 'text',
+  });
+
+  // change the selection so we can test if selection is persisted
+  // if we open the document again.
+  setSelectionAtEnd(SECONDARY_EDITOR_INDEX);
+
+  const expectedSelection = {
+    anchor: 25,
+    head: 25,
+    type: 'text',
+  };
+  expect(getEditorSelection(SECONDARY_EDITOR_INDEX)).toEqual(expectedSelection);
+
+  // load another document
+  act(() => {
+    result.rerender(
+      <TestStoreProvider bangleStore={bangleStore} bangleStoreChanged={0}>
+        <Editor
+          editorId={SECONDARY_EDITOR_INDEX}
+          wsPath="test-ws:two.md"
+          className="test-class2"
+          extensionRegistry={extensionRegistry}
+        />
+      </TestStoreProvider>,
+    );
+  });
+
+  await waitFor(() => {
+    expect(result!.container.innerHTML).toContain(TWO_DOC_CONTENT);
+  });
+  // The new editor should not use the selection from one.md
+  expect(getEditorSelection(SECONDARY_EDITOR_INDEX)).toEqual({
+    anchor: 1,
+    head: 1,
+    type: 'text',
+  });
+
+  // now load the one.md document again, this time the selection
+  // should be hydrated with `expectedSelection`
+  act(() => {
+    result = render(
+      <TestStoreProvider bangleStore={bangleStore} bangleStoreChanged={0}>
+        <Editor
+          editorId={SECONDARY_EDITOR_INDEX}
+          wsPath="test-ws:one.md"
+          className="test-class1"
+          extensionRegistry={extensionRegistry}
+        />
+      </TestStoreProvider>,
+    );
+  });
+
+  await waitFor(() => {
+    expect(result!.container.innerHTML).toContain(ONE_DOC_CONTENT);
+  });
+
+  expect(getEditorSelection(SECONDARY_EDITOR_INDEX)).toEqual(expectedSelection);
 });
 
-test('mounting unmounting calls setEditorUnmounted', async () => {
-  act(() => {
+test('mounting and unmounting set state correctly in editor slice', async () => {
+  const { store: bangleStore } = await setup();
+
+  await act(async () => {
     result = render(
-      <div>
+      <TestStoreProvider bangleStore={bangleStore} bangleStoreChanged={0}>
         <Editor
-          editorId={1}
-          wsPath="something:blah.md"
+          editorId={SECONDARY_EDITOR_INDEX}
+          wsPath="test-ws:one.md"
           className="test-class"
+          extensionRegistry={extensionRegistry}
         />
-      </div>,
+      </TestStoreProvider>,
     );
   });
 
   await waitFor(() => {
+    expect(result!.container.innerHTML).toContain(ONE_DOC_CONTENT);
+  });
+  await waitFor(() => {
     expect(result.container.innerHTML).toContain('class="test-class');
   });
 
-  expect(setEditorReady).toBeCalledTimes(1);
-  expect(setEditorReady).nthCalledWith(
-    1,
-    1,
-    'something:blah.md',
-    expect.any(BangleEditor),
-  );
-
-  expect(setEditorUnmounted).toBeCalledTimes(0);
-
-  const editorRef = (setEditorReady as any).mock.calls[0][2];
-  expect(editorRef).not.toBeFalsy();
+  expect(getEditor(PRIMARY_EDITOR_INDEX)(bangleStore.state)).toBeUndefined();
+  expect(getEditor(SECONDARY_EDITOR_INDEX)(bangleStore.state)).toBeDefined();
 
   result.unmount();
 
-  expect(setEditorReady).toBeCalledTimes(1);
-  expect(setEditorUnmounted).toBeCalledTimes(1);
-  expect(setEditorUnmounted).nthCalledWith(1, 1, expect.any(BangleEditor));
-  expect((setEditorUnmounted as any).mock.calls[0][1]).toBe(editorRef);
+  expect(getEditor(PRIMARY_EDITOR_INDEX)(bangleStore.state)).toBeUndefined();
+  expect(getEditor(SECONDARY_EDITOR_INDEX)(bangleStore.state)).toBeUndefined();
 });
 
-test('works without editorId', async () => {
-  act(() => {
+test('revokes editor proxy', async () => {
+  const { store: bangleStore } = await setup();
+
+  let revokeSpy = jest.fn();
+  let spy = jest
+    .spyOn(global.Proxy, 'revocable')
+    .mockImplementation((r) => ({ proxy: r, revoke: revokeSpy }));
+
+  await act(async () => {
     result = render(
-      <div>
-        <Editor wsPath="something:blah.md" className="test-class" />
-      </div>,
+      <TestStoreProvider bangleStore={bangleStore} bangleStoreChanged={0}>
+        <Editor
+          editorId={SECONDARY_EDITOR_INDEX}
+          wsPath="test-ws:one.md"
+          className="test-class"
+          extensionRegistry={extensionRegistry}
+        />
+      </TestStoreProvider>,
     );
+  });
+
+  await waitFor(() => {
+    expect(result!.container.innerHTML).toContain(ONE_DOC_CONTENT);
   });
 
   await waitFor(() => {
     expect(result.container.innerHTML).toContain('class="test-class');
   });
 
-  expect(result!.container.innerHTML).toContain('Hello world! I am a test');
-  expect(result!.container).toMatchSnapshot();
+  jest.useFakeTimers();
+
+  act(() => {
+    result.unmount();
+  });
+
+  jest.runAllTimers();
+
+  expect(spy).toBeCalledTimes(1);
+
+  expect(revokeSpy).toBeCalledTimes(1);
 });
 
 test('changing of wsPath works', async () => {
-  getNoteMock.mockImplementation((wsPath) => async () => {
-    if (wsPath.endsWith('one.md')) {
-      return generateDoc('one note');
-    }
-    if (wsPath.endsWith('two.md')) {
-      return generateDoc('two note');
-    }
-    throw new Error('Unknown wsPath');
-  });
+  const { store: bangleStore } = await setup();
 
-  act(() => {
+  await act(async () => {
     result = render(
-      <div>
-        <Editor editorId={1} className="test-class" wsPath="something:one.md" />
-      </div>,
+      <TestStoreProvider bangleStore={bangleStore} bangleStoreChanged={0}>
+        <Editor
+          editorId={SECONDARY_EDITOR_INDEX}
+          className="test-class"
+          wsPath="test-ws:one.md"
+          extensionRegistry={extensionRegistry}
+        />
+      </TestStoreProvider>,
     );
+  });
+
+  await waitFor(() => {
+    expect(result!.container.innerHTML).toContain(ONE_DOC_CONTENT);
   });
 
   await waitFor(() => {
     expect(result.container.innerHTML).toContain('class="test-class');
   });
 
-  expect(result!.container.innerHTML).toContain('one note');
+  expect(result!.container.innerHTML).toContain(ONE_DOC_CONTENT);
 
-  act(() => {
+  await act(async () => {
     result.rerender(
-      <div>
-        <Editor editorId={1} wsPath="something:two.md" className="test-class" />
-      </div>,
+      <TestStoreProvider bangleStore={bangleStore} bangleStoreChanged={0}>
+        <Editor
+          editorId={SECONDARY_EDITOR_INDEX}
+          wsPath="test-ws:two.md"
+          className="test-class"
+          extensionRegistry={extensionRegistry}
+        />
+      </TestStoreProvider>,
     );
   });
 
@@ -255,58 +292,59 @@ test('changing of wsPath works', async () => {
     expect(result.container.innerHTML).toContain('class="test-class');
   });
 
-  expect(getNote).toBeCalledTimes(2);
-
-  expect(result!.container.innerHTML).toContain('two note');
+  expect(result!.container.innerHTML).toContain(TWO_DOC_CONTENT);
 });
 
 describe('useGetEditorState', () => {
-  test('generates correct state', () => {
+  test('generates correct state', async () => {
+    const { store: bangleStore } = await setup();
+
     const { result } = renderHook(() =>
       useGetEditorState({
-        editorId: 0,
+        editorId: PRIMARY_EDITOR_INDEX,
         extensionRegistry,
         initialValue: '',
         wsPath: 'something:one.md',
         editorDisplayType: EditorDisplayType.Page,
         dispatchSerialOperation: jest.fn(),
-        bangleStore: initialBangleStore,
+        bangleStore: bangleStore,
         initialSelection: undefined,
       }),
     );
 
-    expect(result.current?.pmState.toJSON()).toMatchInlineSnapshot(`
-      Object {
-        "doc": Object {
-          "content": Array [
-            Object {
+    expect(result.current.pmState.toJSON()).toMatchInlineSnapshot(`
+      {
+        "doc": {
+          "content": [
+            {
               "type": "paragraph",
             },
           ],
           "type": "doc",
         },
-        "selection": Object {
+        "selection": {
           "anchor": 1,
           "head": 1,
           "type": "text",
         },
       }
     `);
-    expect(result.current?.specRegistry).toBeTruthy();
+    expect(result.current.specRegistry).toBeTruthy();
   });
 
-  test('when initial selection is provided', () => {
+  test('when initial selection is provided', async () => {
     const pmNode = createPMNode([], `# Hello World`.trim());
+    const { store: bangleStore } = await setup();
 
     const { result } = renderHook(() =>
       useGetEditorState({
-        editorId: 0,
+        editorId: PRIMARY_EDITOR_INDEX,
         extensionRegistry,
         initialValue: pmNode,
         wsPath: 'something:one.md',
         editorDisplayType: EditorDisplayType.Page,
         dispatchSerialOperation: jest.fn(),
-        bangleStore: initialBangleStore,
+        bangleStore: bangleStore,
         initialSelection: Selection.fromJSON(pmNode, {
           anchor: 5,
           head: 5,
@@ -315,23 +353,23 @@ describe('useGetEditorState', () => {
       }),
     );
 
-    expect(result.current?.pmState.toJSON().selection).toEqual({
+    expect(result.current.pmState.toJSON().selection).toEqual({
       anchor: 5,
       head: 5,
       type: 'text',
     });
 
-    expect(result.current?.pmState.toJSON()).toMatchInlineSnapshot(`
-      Object {
-        "doc": Object {
-          "content": Array [
-            Object {
-              "attrs": Object {
+    expect(result.current.pmState.toJSON()).toMatchInlineSnapshot(`
+      {
+        "doc": {
+          "content": [
+            {
+              "attrs": {
                 "collapseContent": null,
                 "level": 1,
               },
-              "content": Array [
-                Object {
+              "content": [
+                {
                   "text": "Hello World",
                   "type": "text",
                 },
@@ -341,13 +379,13 @@ describe('useGetEditorState', () => {
           ],
           "type": "doc",
         },
-        "selection": Object {
+        "selection": {
           "anchor": 5,
           "head": 5,
           "type": "text",
         },
       }
     `);
-    expect(result.current?.specRegistry).toBeTruthy();
+    expect(result.current.specRegistry).toBeTruthy();
   });
 });

@@ -16,7 +16,7 @@ import { WORKER_ABORTABLE_SERVICE_ABORTED } from './util';
  * @returns
  */
 export function mainInjectAbortableProxy<
-  T extends { __signalWorkerToAbort: (uid: string) => void },
+  T extends { __signalWorkerToAbortMethod: (uid: string) => void },
 >(
   workerProxiedMethods: T,
   {
@@ -24,12 +24,15 @@ export function mainInjectAbortableProxy<
   }: {
     abortableMethodIdentifier?: string;
   } = {},
-) {
+): T {
   return new Proxy(workerProxiedMethods, {
     get(_target, prop) {
+      const method = Reflect.get(_target, prop);
+
       if (
         typeof prop === 'string' &&
-        prop.startsWith(abortableMethodIdentifier)
+        prop.startsWith(abortableMethodIdentifier) &&
+        typeof method === 'function'
       ) {
         return (abortSignal: unknown, ...args: unknown[]) => {
           if (!(abortSignal instanceof AbortSignal)) {
@@ -42,23 +45,27 @@ export function mainInjectAbortableProxy<
 
           const uid = prop + objectUid(abortSignal);
 
-          abortSignal.addEventListener('abort', () => {
-            console.debug('aborting ' + uid);
-            _target.__signalWorkerToAbort(uid);
-          });
+          abortSignal.addEventListener(
+            'abort',
+            () => {
+              console.debug('aborting ' + uid);
+              _target.__signalWorkerToAbortMethod(uid);
+            },
+            { once: true },
+          );
 
-          return Reflect.apply(Reflect.get(_target, prop), null, [
-            uid,
-            ...args,
-          ]).catch((error: unknown) => {
-            if (error === WORKER_ABORTABLE_SERVICE_ABORTED) {
-              throw new DOMException('Aborted', 'AbortError');
-            }
-            throw error;
-          });
+          return Reflect.apply(method, null, [uid, ...args]).catch(
+            (error: unknown) => {
+              if (error === WORKER_ABORTABLE_SERVICE_ABORTED) {
+                throw new DOMException('Aborted', 'AbortError');
+              }
+              throw error;
+            },
+          );
         };
       }
-      return Reflect.get(_target, prop);
+
+      return method;
     },
   });
 }

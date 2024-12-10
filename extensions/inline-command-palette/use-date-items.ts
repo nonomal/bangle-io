@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { getDayJs } from '@bangle.io/day-js';
 import { replaceSuggestionMarkWith } from '@bangle.io/inline-palette';
-import type { UnPromisify } from '@bangle.io/shared-types';
-import { getDayJs, useDestroyRef } from '@bangle.io/utils';
+import { useDestroyRef } from '@bangle.io/utils';
 
 import { palettePluginKey } from './config';
 import { PALETTE_ITEM_HINT_TYPE, PaletteItem } from './palette-item';
@@ -23,6 +23,7 @@ const prettyPrintDate = (dayjs: any, date: any) => {
   ) {
     return dayjsInputDate.format('ll');
   }
+
   return dayjsInputDate.format('ll LT');
 };
 const baseItem = PaletteItem.create({
@@ -33,29 +34,30 @@ const baseItem = PaletteItem.create({
   keywords: ['date', 'time'],
   group: 'date',
   disabled: true,
-  editorExecuteCommand: ({}) => {
+  editorExecuteCommand: () => {
     // return replaceSuggestionMarkWith(palettePluginKey, getDate(type));
   },
 });
 
-type ChronoLibrariesType = UnPromisify<ReturnType<typeof getTimeLibrary>>;
+type ChronoLibrariesType = Awaited<ReturnType<typeof getTimeLibrary>>;
 let _libraries:
   | undefined
   | {
-      chrono: typeof import('chrono-node');
-      dayjs: UnPromisify<ReturnType<typeof getDayJs>>;
+      chrono: ReturnType<typeof import('./chrono').getChrono>;
+      dayjs: Awaited<ReturnType<typeof getDayJs>>;
     } = undefined;
 async function getTimeLibrary() {
   if (!_libraries) {
     let [chrono, dayjs] = (await Promise.all([
-      import('chrono-node'),
+      import('./chrono').then((r) => {
+        return r.getChrono();
+      }),
       getDayJs(),
     ])) as any;
 
-    chrono = chrono.default || chrono;
-
     _libraries = { chrono, dayjs: dayjs };
   }
+
   return _libraries;
 }
 
@@ -77,6 +79,7 @@ export function useDateItems(query: string) {
   const items = useMemo(() => {
     if (parsedDateObj) {
       const { parsedDates, dayjs } = parsedDateObj;
+
       return parsedDates.map((p: any, i: number) =>
         PaletteItem.create({
           uid: 'parsedDate' + i,
@@ -94,6 +97,7 @@ export function useDateItems(query: string) {
         }),
       );
     }
+
     return [baseItem];
   }, [parsedDateObj]);
 
@@ -123,6 +127,7 @@ export function useDateItems(query: string) {
       const { chrono, dayjs } = chronoRef.current;
       let startOfDay = dayjs().startOf('day').toDate();
       const parsedDates = chrono.parse(query, startOfDay);
+
       if (parsedDates.length > 0) {
         updateParsedDate({ parsedDates, chrono, dayjs });
       } else {
@@ -137,5 +142,6 @@ export function useDateItems(query: string) {
       updateParsedDate(undefined);
     }
   }, [query, parsedDateObj]);
+
   return items;
 }

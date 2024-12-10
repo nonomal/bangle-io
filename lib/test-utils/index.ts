@@ -1,12 +1,21 @@
+import waitForExpect from 'wait-for-expect';
+
+waitForExpect.defaults.timeout = 600;
+waitForExpect.defaults.interval = 30;
 export * from './action-serializers';
-export * from './create-basic-test-store';
+export { createBareStore } from './create-bare-store';
+export { createBasicStore } from './create-basic-store';
+export {
+  createBasicTestStore,
+  setupMockWorkspaceWithNotes,
+} from './create-basic-test-store';
 export * from './create-editor-view';
 export * from './create-pm-node';
-export * from './create-test-store';
 export * from './extension-registry';
-export * from './fake-idb';
 export * from './function-mock-return';
-export * from './indexedb-ws-helpers';
-export * as idbHelpers from './indexedb-ws-helpers';
+export * from './setup-mock-message-channel';
 export * from './test-memory-history-slice';
 export { TestStoreProvider } from './TestStoreProvider';
+export { waitForExpect };
+export type { TestInitialSliceStateOverride } from './create-basic-store';
+export { StorybookStore } from './StorybookStore';

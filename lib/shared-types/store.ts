@@ -1,13 +1,14 @@
-import { ApplicationStore } from '@bangle.io/create-store';
 import type { ExtensionRegistry } from '@bangle.io/extension-registry';
+import type { Store } from '@bangle.io/nsm-3';
 
-export interface BangleStateConfig {
+export interface BaseStateConfig {
   readonly extensionRegistry: ExtensionRegistry;
-  readonly saveState: (store: ApplicationStore) => void;
-  readonly useWebWorker: boolean;
 }
 
-export interface NaukarStateConfig {
-  readonly extensionRegistry: ExtensionRegistry;
+export interface NaukarStateConfig extends BaseStateConfig {
   readonly port: MessagePort;
 }
+
+// TODO prefer using API store type
+export type NsmStore<N extends string = any> = Store<N>;
+export type NsmStoreState = Store['state'];

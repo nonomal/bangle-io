@@ -31,7 +31,7 @@ export async function searchPmNode(
   signal: AbortSignal,
   query: string,
   docUids: string[],
-  getDoc: (uid: string) => Promise<Node<any> | undefined>,
+  getDoc: (uid: string) => Promise<Node | undefined>,
   atomSearchTypes: AtomSearchTypes[] = [],
   {
     concurrency = DEFAULT_CONCURRENCY,
@@ -66,11 +66,12 @@ export async function searchPmNode(
           matches: [],
         };
         doc.descendants((node, pos, parent) => {
-          if (perFileMatchCount > perFileMatchMax) {
+          if (perFileMatchCount > perFileMatchMax || !parent) {
             return false;
           }
 
           let parentName = parent.type.name;
+
           if (parentName === 'doc') {
             parentName = node.type.name;
           }
@@ -122,6 +123,7 @@ export async function searchPmNode(
                 printAfter: atomSearchType.printAfter,
               },
             );
+
             if (result) {
               results.matches.push(result);
             }
@@ -179,6 +181,7 @@ export function matchText(
   while ((match = regex1.exec(text)) !== null) {
     count++;
     const [start, end] = [match.index, match.index + match[0]!.length];
+
     if (limit && count > limit) {
       break;
     }
@@ -196,6 +199,7 @@ export function getMatchFragment(
 ) {
   const prefixStart = Math.max(0, start - maxChars);
   let prefix = str.substring(prefixStart, start).trimStart();
+
   if (prefixStart > 0) {
     // to avoid cutting of words start from
     prefix = startStringWithWord(prefix);
@@ -203,6 +207,7 @@ export function getMatchFragment(
   }
 
   let suffix = str.substr(end, maxChars).trimEnd();
+
   if (end + maxChars < str.length) {
     suffix = endStringWithWord(suffix);
     suffix += '…';
@@ -213,18 +218,22 @@ export function getMatchFragment(
 
 export function startStringWithWord(str: string) {
   const whiteSpaceIndex = str.indexOf(' ');
+
   if (whiteSpaceIndex === -1) {
     return str;
   }
+
   // trim in case there is more white space at start
   return str.slice(whiteSpaceIndex + 1).trimStart();
 }
 
 export function endStringWithWord(str: string) {
   const whiteSpaceIndex = str.lastIndexOf(' ');
+
   if (whiteSpaceIndex === -1) {
     return str;
   }
+
   // trim in case there is more white space at end
   return str.slice(0, whiteSpaceIndex).trimEnd();
 }

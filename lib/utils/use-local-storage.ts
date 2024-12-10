@@ -49,6 +49,7 @@ export function useLocalStorage<S>(
         } catch (error) {
           console.log(error);
         }
+
         return valueToStore;
       });
     },
@@ -65,17 +66,21 @@ function retrieveValue<T>(key: string, _defaultValue: T | (() => T)): T {
   try {
     // Get from local storage by key
     const item = localStorageGetItem<T>(key);
+
     if (item == null) {
       const defValue = getDefValue();
       // if item does not exist save it in local storage
       localStorageSetItem(key, defValue);
+
       return defValue;
     }
+
     return item;
   } catch (error) {
     // If error also return initialValue
     console.log(error);
     localStorageDeleteItem(key);
+
     return getDefValue();
   }
 }
@@ -87,12 +92,13 @@ function localStorageSetItem<T>(key: string, value: T) {
   );
 }
 
-function localStorageDeleteItem<T>(key: string) {
+function localStorageDeleteItem(key: string) {
   window.localStorage.removeItem(key);
 }
 
 function localStorageGetItem<T>(key: string): T | undefined {
   const value = window.localStorage.getItem(key);
+
   if (value == null) {
     return undefined;
   }

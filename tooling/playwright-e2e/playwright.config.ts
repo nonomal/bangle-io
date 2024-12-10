@@ -1,17 +1,20 @@
 // playwright.config.ts
-import { devices, PlaywrightTestConfig } from '@playwright/test';
+import type { PlaywrightTestConfig } from '@playwright/test';
+import { devices } from '@playwright/test';
 
 // eslint-disable-next-line
 const isCI = (process.env as any).CI;
 
+const RETRY_COUNT = 3;
+
 const config: PlaywrightTestConfig = {
+  reporter: [['html', {}]],
   forbidOnly: !!isCI,
-  retries: isCI ? 2 : 0,
   timeout: 20000,
   expect: {
     timeout: 2000,
   },
-  workers: isCI ? 2 : undefined,
+  workers: isCI ? 1 : undefined,
 
   use: {
     // headless: false,
@@ -22,19 +25,40 @@ const config: PlaywrightTestConfig = {
     //   slowMo: 50,
     // },
   },
-  webServer: {
-    command: 'yarn g:build-prod-serve',
-    port: 1234,
-    // port: 4000,
-    timeout: 120 * 1000,
-    reuseExistingServer: !isCI,
-  },
+  webServer: [
+    {
+      command: 'yarn g:build-prod-serve',
+      port: 1234,
+      timeout: 120 * 1000,
+      reuseExistingServer: !isCI,
+    },
+    {
+      command: 'yarn g:build-independent-e2e-tests-server',
+      port: 1235,
+      timeout: 120 * 1000,
+      reuseExistingServer: !isCI,
+    },
+  ],
   projects: [
     {
       name: 'chromium',
-
+      testIgnore: [/performance/, /-safari/, /-firefox/],
+      retries: isCI ? RETRY_COUNT : 0,
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'performance',
+      testMatch: /performance/,
+      retries: isCI ? RETRY_COUNT : 0,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'safari',
+      testMatch: [/-safari/],
+      retries: isCI ? RETRY_COUNT : 0,
+      use: { ...devices['Desktop Safari'] },
+    },
+
     // {
     //   name: 'firefox',
     //   use: { ...devices['Desktop Firefox'] },

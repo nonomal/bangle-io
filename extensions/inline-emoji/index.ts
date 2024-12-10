@@ -1,5 +1,5 @@
 import { emoji, emojiMarkdownItPlugin } from '@bangle.dev/emoji';
-import { EditorView } from '@bangle.dev/pm';
+import type { EditorView } from '@bangle.dev/pm';
 import { emojiSuggest } from '@bangle.dev/react-emoji-suggest';
 
 import { Extension } from '@bangle.io/extension-registry';
@@ -16,8 +16,9 @@ const maxItems = 500;
 
 function getEmojis(queryText = '') {
   let result = aliasEmojiPair
-    .filter(([item]) => item?.includes(queryText))
+    .filter(([item]) => (item ? item.includes(queryText) : false))
     .slice(0, maxItems);
+
   return [
     {
       name: '',
@@ -42,6 +43,7 @@ const extension = Extension.create({
         key: emojiSuggestKey,
         getEmojiGroups: (queryText) => {
           const result = getEmojis(queryText);
+
           return result;
         },
         markName: emojiSuggestMarkName,

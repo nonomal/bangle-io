@@ -38,10 +38,16 @@ describe('abortable worker', () => {
         let timer = setTimeout(() => {
           res();
         }, 500);
-        signal.addEventListener('abort', () => {
-          clearInterval(timer);
-          rej(new DOMException('Aborted', 'AbortError'));
-        });
+        signal.addEventListener(
+          'abort',
+          () => {
+            clearInterval(timer);
+            rej(new DOMException('Aborted', 'AbortError'));
+          },
+          {
+            once: true,
+          },
+        );
       });
     });
 
@@ -59,7 +65,7 @@ describe('abortable worker', () => {
 
     controller.abort();
 
-    await expect(result).rejects.toMatchInlineSnapshot(`[AbortError: Aborted]`);
+    await expect(result).rejects.toMatchInlineSnapshot(`DOMException {}`);
   });
 
   test('doesnt touch methods that donot start with abortable', async () => {

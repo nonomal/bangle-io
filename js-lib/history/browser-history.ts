@@ -1,32 +1,51 @@
-import { BaseHistory } from './base-history';
+import type { BaseHistory } from './base-history';
 import { createTo } from './create-to';
 import {
   eventPushState,
   eventReplaceState,
   historyEvents,
 } from './patch-history';
-import { Location } from './types';
+import type { Location } from './types';
 
 export class BrowserHistory implements BaseHistory {
-  private host = typeof window !== 'undefined' ? window : undefined;
-  private currentLoc: Location;
+  private _checkForUpdates = () => {
+    const current = calcLocation(this._base);
 
-  private historyState: any;
-  private historyCounter = 0;
+    if (!isLocationEqual(current, this._currentLoc)) {
+      this._currentLoc = current;
+      this._onChange(current);
+    }
+    this.refreshHistoryState();
+  };
+
+  private _currentLoc: Location;
+  private _historyCounter = 0;
+  private _historyState: any;
+
+  private _host = typeof window !== 'undefined' ? window : undefined;
 
   constructor(
-    private base = '',
-    private onChange: (location: Location) => void,
+    private _base = '',
+    private _onChange: (location: Location) => void,
   ) {
     historyEvents.forEach((e) =>
-      this.host?.addEventListener(e, this.checkForUpdates),
+      this._host?.addEventListener(e, this._checkForUpdates),
     );
-    this.currentLoc = calcLocation(this.base);
+    this._currentLoc = calcLocation(this._base);
+  }
+
+  // we do a simple managed history state, where we assume
+  get pathname() {
+    return this._currentLoc.pathname;
+  }
+
+  get search() {
+    return this._currentLoc.search;
   }
 
   destroy(): void {
     historyEvents.forEach((e) =>
-      this.host?.removeEventListener(e, this.checkForUpdates),
+      this._host?.removeEventListener(e, this._checkForUpdates),
     );
   }
 
@@ -38,24 +57,24 @@ export class BrowserHistory implements BaseHistory {
     // this loop resume, causing problems elsewhere action dispatches.
     setTimeout(() => {
       window.history[replace ? eventReplaceState : eventPushState](
-        this.createHistoryState(),
+        this._createHistoryState(),
         '',
-        this.base + to,
+        this._base + to,
       );
     }, 0);
   }
-  // we do a simple managed history state, where we assume
+
   // any state added to history is by us.
   refreshHistoryState() {
     // In certain cases like historyPop, the job of this function is
     // to set it back to the value it last held.
-    if (window.history.state == null && this.historyState) {
-      this.updateHistoryState(this.historyState);
+    if (window.history.state == null && this._historyState) {
+      this.updateHistoryState(this._historyState);
     }
   }
 
   updateHistoryState(hState: any) {
-    this.historyState = hState;
+    this._historyState = hState;
     setTimeout(() => {
       const to = createTo(
         {
@@ -65,38 +84,20 @@ export class BrowserHistory implements BaseHistory {
         this,
       );
       window.history[eventReplaceState](
-        this.createHistoryState(),
+        this._createHistoryState(),
         '',
-        this.base + to,
+        this._base + to,
       );
     }, 0);
   }
 
-  private createHistoryState() {
-    return { key: this.historyCounter++, value: this.historyState || null };
+  private _createHistoryState() {
+    return { key: this._historyCounter++, value: this._historyState || null };
   }
-
-  get pathname() {
-    return this.currentLoc.pathname;
-  }
-
-  get search() {
-    return this.currentLoc.search;
-  }
-
-  private checkForUpdates = () => {
-    const current = calcLocation(this.base);
-
-    if (!isLocationEqual(current, this.currentLoc)) {
-      this.currentLoc = current;
-      this.onChange(current);
-    }
-    this.refreshHistoryState();
-  };
 }
 
 const getCurrentPathname = (): string => {
-  return getDocumentLocation()?.pathname;
+  return getDocumentLocation().pathname;
 };
 
 const currentPathname = (base: string, path = getCurrentPathname()) =>
@@ -112,10 +113,12 @@ const getDocumentLocation = (): Document['location'] => {
 const calcLocation = (base: string): Location => {
   const pathname = currentPathname(base);
   let search = getDocumentLocation().search;
+
   // keep search free of `?`
   if (search.startsWith('?')) {
     search = search.slice(1);
   }
+
   return { pathname, search };
 };
 

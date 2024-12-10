@@ -22,12 +22,14 @@
     "access": "public"
   },
   "dependencies": {
-    "@bangle.io/base-error": "workspace:*",
-    "base64-js": "^1.5.1",
-    "ts-pattern": "^3.3.5"
+    "@bangle.io/tri-state": "workspace:*",
+    "ts-pattern": "^5.0.4",
+    "tslib": "2.6.0",
+    "typescript": "5.1.6"
   },
   "devDependencies": {
-    "type-fest": "^2.12.0"
+    "@bangle.io/db-key-val": "workspace:*",
+    "type-fest": "^4.0.0"
   },
   "license": "AGPL-3.0-or-later"
 }

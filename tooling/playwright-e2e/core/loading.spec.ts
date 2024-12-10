@@ -1,5 +1,8 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
 
+import { PRIMARY_EDITOR_INDEX } from '@bangle.io/constants';
+
+import { withBangle as test } from '../fixture-with-bangle';
 import {
   clearEditor,
   createNewNote,
@@ -13,18 +16,18 @@ import {
   sleep,
 } from '../helpers';
 
-test.beforeEach(async ({ page, baseURL }, testInfo) => {
-  await page.goto(baseURL!, { waitUntil: 'networkidle' });
+test.beforeEach(async ({ bangleApp }, testInfo) => {
+  await bangleApp.open();
 });
 
-test.describe.parallel('loading', () => {
+test.describe('loading', () => {
   test('basic test', async ({ page, baseURL }) => {
     const title = await page.title();
     expect(title).toMatch('getting started.md - bangle.io');
   });
 
   test('Activity bar', async ({ page }) => {
-    const handle = await page.$('.activitybar');
+    const handle = await page.$('[data-testid="app-activitybar_activitybar"]');
     expect(handle).not.toBe(null);
   });
 
@@ -34,14 +37,16 @@ test.describe.parallel('loading', () => {
   });
 
   test('shows file palette', async ({ page }) => {
-    let handle = await page.$('.universal-palette-container');
+    let handle = await page.$('.B-ui-components_universal-palette-container');
     expect(handle).toBe(null);
 
     await page.keyboard.down(ctrlKey);
     await page.keyboard.press('p');
     await page.keyboard.up(ctrlKey);
 
-    const locator = page.locator('.universal-palette-container');
+    const locator = page.locator(
+      '.B-ui-components_universal-palette-container',
+    );
 
     expect(await locator.textContent()).toMatch('NavigateEnter');
   });
@@ -53,16 +58,19 @@ test.describe.parallel('loading', () => {
     await page.keyboard.up('Shift');
     await page.keyboard.up(ctrlKey);
 
-    let handle = await page.waitForSelector('.universal-palette-container', {
-      timeout: 2 * SELECTOR_TIMEOUT,
-    });
+    let handle = await page.waitForSelector(
+      '.B-ui-components_universal-palette-container',
+      {
+        timeout: 2 * SELECTOR_TIMEOUT,
+      },
+    );
     expect(handle).not.toBe(null);
     expect(
       (
-        await page.$$eval('.universal-palette-item', (nodes) =>
+        await page.$$eval('.B-ui-components_universal-palette-item', (nodes) =>
           nodes.map((n) => n.getAttribute('data-id')),
         )
-      ).includes('operation::@bangle.io/core-operations:TOGGLE_UI_THEME'),
+      ).includes('operation::@bangle.io/core-extension:TOGGLE_UI_COLOR_SCHEME'),
     ).toBe(true);
   });
 
@@ -74,11 +82,13 @@ test.describe.parallel('loading', () => {
     const editorHandle = await page.waitForSelector('.bangle-editor', {
       timeout: SELECTOR_TIMEOUT,
     });
-    await clearEditor(page, 0);
+    await clearEditor(page, PRIMARY_EDITOR_INDEX);
 
-    await editorHandle.type('# Wow', { delay: 3 });
+    await sleep();
+
+    await editorHandle.type('# Wow', { delay: 10 });
     await editorHandle.press('Enter', { delay: 20 });
-    await editorHandle.type('[ ] list', { delay: 3 });
+    await editorHandle.type('[ ] list', { delay: 10 });
 
     await sleep();
 
@@ -93,14 +103,14 @@ test.describe.parallel('loading', () => {
 
     await createNewNote(page, wsName, newFileName);
 
-    const editorLocator = await getEditorLocator(page, 0);
+    const editorLocator = await getEditorLocator(page, PRIMARY_EDITOR_INDEX);
 
     const hasOneUnorderedListElement = () =>
       editorLocator.evaluate(
         (node) => node.querySelectorAll('ul').length === 1,
       );
 
-    await clearEditor(page, 0);
+    await clearEditor(page, PRIMARY_EDITOR_INDEX);
     expect(await hasOneUnorderedListElement()).toBe(false);
 
     await editorLocator.type('/bullet list', { delay: 3 });
@@ -119,14 +129,14 @@ test.describe.parallel('loading', () => {
 
     await createNewNote(page, wsName, newFileName);
 
-    const editorLocator = await getEditorLocator(page, 0);
+    const editorLocator = await getEditorLocator(page, PRIMARY_EDITOR_INDEX);
 
     const hasOneH3Element = () =>
       editorLocator.evaluate(
         (node) => node.querySelectorAll('h3').length === 1,
       );
 
-    await clearEditor(page, 0);
+    await clearEditor(page, PRIMARY_EDITOR_INDEX);
 
     expect(await hasOneH3Element()).toBe(false);
 

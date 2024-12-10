@@ -1,5 +1,5 @@
 /**
- * @jest-environment jsdom
+ * @jest-environment @bangle.io/jsdom-env
  */
 /** @jsx psx */
 /// <reference path="../../../missing-test-types.d.ts" />
@@ -20,9 +20,11 @@ const specRegistry = new SpecRegistry([...defaultSpecs(), editorTagSpec()]);
 
 const serialize = async (doc: any) => {
   let content = doc;
+
   if (typeof doc === 'function') {
     content = doc(specRegistry.schema);
   }
+
   return markdownSerializer(specRegistry).serialize(content);
 };
 
@@ -288,6 +290,18 @@ describe('seialization to markdown', () => {
           </para>
         </doc>,
       ),
+    ).toEqual('#hello#world');
+  });
+
+  test('serializes two tags with space in between 1', async () => {
+    expect(
+      await serialize(
+        <doc>
+          <para>
+            <tag tagValue="hello" /> <tag tagValue="world" />
+          </para>
+        </doc>,
+      ),
     ).toEqual('#hello #world');
   });
 
@@ -302,7 +316,7 @@ describe('seialization to markdown', () => {
           </para>
         </doc>,
       ),
-    ).toEqual('#hello- #world');
+    ).toEqual('#hello-#world');
   });
 
   test('serializes two tags in list', async () => {
@@ -363,7 +377,7 @@ describe('seialization to markdown', () => {
     ).toMatchInlineSnapshot(`
       "- hey
 
-        - #hello 
+        - #hello
 
           #world"
 `);

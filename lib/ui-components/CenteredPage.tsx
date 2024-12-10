@@ -1,6 +1,10 @@
-import React, { ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import React from 'react';
 
+import { vars } from '@bangle.io/css-vars';
 import { cx } from '@bangle.io/utils';
+
+import { Inline } from './Inline';
 
 /**
  * A helper for showing non scrollable centered things that match the pages look
@@ -11,7 +15,9 @@ export function CenteredBoxedPage({
   className,
   title,
   actions,
+  dataTestId,
 }: {
+  dataTestId?: string;
   childClassName?: string;
   children: ReactNode;
   className?: string;
@@ -24,36 +30,34 @@ export function CenteredBoxedPage({
 }) {
   return (
     <div
+      data-testid={dataTestId}
       className={cx(
-        'ui-components_centered-page w-full h-full flex flex-col px-8 mt-6 lg:p-0 lg:m-0 justify-center items-center',
+        'w-full h-full smallscreen:h-screen flex flex-col px-8 mt-6',
+        'lg:p-0 lg:m-0 justify-center smallscreen:justify-start items-center',
         className,
       )}
     >
       <div
-        className="w-full rounded-lg"
+        className="w-full rounded-lg border-neutral bg-colorNeutralBgLayerTop"
         style={{
-          padding: 'var(--window-page-box-padding)',
-          backgroundColor: 'var(--window-bgColor-1)',
-          maxWidth: 'min(var(--page-maxWidth), 100vw)',
-          border: '1px solid var(--window-borderColor-1)',
+          padding: vars.misc.pagePadding,
+          maxWidth: `min(${vars.misc.pageMaxWidth}, 100vw)`,
         }}
       >
         <div
           className={cx('w-full', childClassName)}
           style={{
-            maxWidth: 'min(var(--page-maxWidth), 100vw)',
+            maxWidth: `min(${vars.misc.pageMaxWidth}, 100vw)`,
           }}
         >
           {title && (
-            <h1 className="mb-6 text-base font-bold leading-none lg:text-xl">
-              {title}
-            </h1>
+            <h1 className="mb-6 font-bold text-xl leading-none">{title}</h1>
           )}
-          <div className="text-base font-medium sm:mb-1">{children}</div>
+          <div className="text-base sm:mb-1">{children}</div>
           {actions && (
-            <div className="flex flex-row mt-6 ui-components_centered-page-actions">
+            <Inline collapse className="mt-6 ">
               {actions}
-            </div>
+            </Inline>
           )}
         </div>
       </div>

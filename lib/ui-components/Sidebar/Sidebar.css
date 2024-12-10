@@ -1,55 +1,58 @@
 /* sidebar row2 */
-.b-sidebar-row2.hover:hover {
-  background-color: var(--accent-secondary);
+.B-ui-components_sidebar-row2.BU_hover:hover {
+  background-color: var(--BV-colorNeutralSolidFaint);
 }
-.b-sidebar-row2.active {
-  background-color: var(--accent-primary-1);
+
+.B-ui-components_sidebar-row2.BU_active {
+  background-color: var(--BV-colorPromoteSolidSubdued);
 }
 
 /* prevent hover overwriting allowed */
-.b-sidebar-row2.hover.active {
-  background-color: var(--accent-primary-1);
+.B-ui-components_sidebar-row2.BU_hover.BU_active {
+  background-color: var(--BV-colorPromoteSolidSubdued);
 }
 
-.b-sidebar-row2.disable {
-  color: var(--textColor-1);
+.B-ui-components_sidebar-row2.BU_disable {
+  color: var(--BV-colorNeutralTextSubdued);
   cursor: not-allowed;
-  background-color: var(--universal-palette-item-disabled-bgColor);
+  background-color: var(--BC-universalPaletteItemDisabledBgColor);
 }
-.b-sidebar-row2.disable.hover:hover {
-  background-color: var(--universal-palette-item-disabled-bgColor);
+
+.B-ui-components_sidebar-row2.BU_disable.BU_hover:hover {
+  background-color: var(--BC-universalPaletteItemDisabledBgColor);
 }
 
 /* node positioning */
-.b-sidebar-row2 .b-left-node {
+.B-ui-components_sidebar-row2 .B-ui-components_left-node {
   display: inline-flex;
   flex-direction: row;
   justify-content: center;
 }
-.b-sidebar-row2 .b-right-node {
+
+.B-ui-components_sidebar-row2 .B-ui-components_right-node {
   display: inline-flex;
   flex-direction: row;
   align-items: center;
 }
 
-.b-sidebar-row2:hover .b-right-node {
+.B-ui-components_sidebar-row2:hover .B-ui-components_right-node {
   display: none;
 }
 
-.b-sidebar-row2 .b-right-hover-node {
+.B-ui-components_sidebar-row2 .B-ui-components_right-hover-node {
   display: none;
 }
 
-.b-sidebar-row2:hover .b-right-hover-node {
+.B-ui-components_sidebar-row2:hover .B-ui-components_right-hover-node {
   display: inline-flex;
   flex-direction: row;
   align-items: center;
 }
 
-.b-sidebar-row2 .b-extra-info {
-  color: var(--textColor-1);
+.B-ui-components_sidebar-row2 .B-ui-components_extra-info {
+  color: var(--BV-colorNeutralTextSubdued);
 }
 
-.b-sidebar-row2 .b-description {
-  color: var(--textColor-1);
+.B-ui-components_sidebar-row2 .B-ui-components_description {
+  color: var(--BV-colorNeutralTextSubdued);
 }

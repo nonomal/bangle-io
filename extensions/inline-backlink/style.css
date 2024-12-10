@@ -1,53 +1,16 @@
-.inline-backlink_backlink {
-  padding: 0 0.4rem;
-  border-radius: var(--window-pill-borderRadius);
-  background-color: var(--backlink-backlink-bgColor);
-  margin: 0 0.2rem;
-  text-align: start;
+.B-inline-backlink_backlink-node {
+  background-color: var(--BV-miscEditorBacklinkBg);
+  color: var(--BV-miscEditorBacklinkText);
 }
 
-.inline-backlink_backlink:hover {
-  text-decoration: underline;
-  background-color: var(--backlink-backlink-hover-bgColor);
+.B-inline-backlink_backlink-node.B-inline-backlink_backlink-node-not-found {
+  background-color: var(--BV-colorNeutralSolidFaint);
 }
 
-.inline-backlink_backlinkNotFound {
-  background-color: var(--backlink-backlinkNotFound-bgColor);
+.B-inline-backlink_backlink-node.B-inline-backlink_backlink-node-not-found:hover {
+  background-color: var(--BV-colorNeutralSolidFaint);
 }
 
-.inline-backlink_backlinkNotFound:hover {
-  background-color: var(--backlink-backlinkNotFound-hover-bgColor);
-}
-
-.inline-backlink_backlink > svg {
-  color: var(--window-link-color);
-  fill: var(--backlink-backlink-bgColor);
-  height: 1.2em;
-  width: 1.2em;
-  /* adding a bit of padding to just align this thing well */
-  padding-bottom: 0.15em;
-  vertical-align: middle;
-  position: relative;
-}
-
-.inline-backlink_popup-editor {
-  background-color: var(--window-popupEditor-bgColor);
-  color: var(--window-popupEditor-color);
-  /* setting width and height are important otherwise
-    tippy confuses and causes issue with scroll
-  */
-  width: 400px;
-  height: 400px;
-  z-index: var(--window-popupEditor-zIndex);
-  border: 1px solid var(--window-borderColor-0);
-  box-shadow: rgba(0, 0, 0, 0.3) 0px 4px 28px;
-}
-
-.inline-backlink_widget-container .highlight-text:nth-of-type(2n) {
-  background-color: var(--window-highlight-bgColor);
-}
-
-.inline-backlink_widget-container .inline-backlink_widget-occurrence-count {
-  background-color: var(--window-bgColor-2);
-  padding: 0.125rem;
+.B-inline-backlink_backlink-node:hover {
+  background-color: var(--BV-miscEditorBacklinkBgHover);
 }

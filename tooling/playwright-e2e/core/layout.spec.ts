@@ -1,5 +1,8 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
 
+import { SECONDARY_EDITOR_INDEX } from '@bangle.io/constants';
+
+import { withBangle as test } from '../fixture-with-bangle';
 import {
   createNewNote,
   createWorkspace,
@@ -10,8 +13,8 @@ import {
   sleep,
 } from '../helpers';
 
-test.beforeEach(async ({ page, baseURL }, testInfo) => {
-  await page.goto(baseURL!, { waitUntil: 'networkidle' });
+test.beforeEach(async ({ bangleApp }, testInfo) => {
+  await bangleApp.open();
 });
 
 test('split screen shortcut works', async ({ page }) => {
@@ -23,8 +26,8 @@ test('split screen shortcut works', async ({ page }) => {
   await page.keyboard.up(ctrlKey);
   await sleep();
 
-  await getEditorLocator(page, 1);
-  expect(await page.$('.editor-container_editor-1')).not.toBeNull();
+  await getEditorLocator(page, SECONDARY_EDITOR_INDEX);
+  expect(await page.$('.B-editor-container_editor-1')).not.toBeNull();
 });
 
 test('shows note sidebar correctly', async ({ page }) => {
@@ -34,12 +37,12 @@ test('shows note sidebar correctly', async ({ page }) => {
 
   await runOperation(
     page,
-    'operation::@bangle.io/core-operations:NOTE_TOGGLE_SIDEBAR',
+    'operation::@bangle.io/core-extension:NOTE_TOGGLE_SIDEBAR',
   );
 
-  await page.waitForSelector('.ui-dhancha_note-sidebar', {
+  await page.waitForSelector('.B-ui-dhancha_note-sidebar', {
     timeout: 4 * SELECTOR_TIMEOUT,
   });
 
-  expect(await page.$('.ui-dhancha_note-sidebar')).not.toBeNull();
+  expect(await page.$('.B-ui-dhancha_note-sidebar')).not.toBeNull();
 });

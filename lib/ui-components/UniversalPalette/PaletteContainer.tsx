@@ -20,13 +20,14 @@ export function PaletteContainer({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useWatchClickOutside(containerRef, onClickOutside, onClickInside);
+
   return (
     <div
       data-palette-type={paletteType}
       ref={containerRef}
       className={
-        'universal-palette-container ' +
-        cx(widescreen && ' widescreen', className)
+        'B-ui-components_universal-palette-container z-popup ' +
+        cx(widescreen && ' BU_widescreen', className)
       }
     >
       {children}

@@ -1,179 +1,263 @@
-import { BangleEditor } from '@bangle.dev/core';
+import { search } from '@bangle.dev/search';
 
-import { MAX_OPEN_EDITORS } from '@bangle.io/constants';
-import { pageLifeCycleTransitionedTo } from '@bangle.io/slice-page';
+import {
+  PRIMARY_EDITOR_INDEX,
+  SECONDARY_EDITOR_INDEX,
+} from '@bangle.io/constants';
+import {
+  getEditorPluginMetadata,
+  searchPluginKey,
+} from '@bangle.io/editor-common';
+import { cleanup, effect, ref } from '@bangle.io/nsm-3';
+import { nsmPageSlice } from '@bangle.io/slice-page';
+import { nsmUISlice } from '@bangle.io/slice-ui';
 import { debounceFn, trimEndWhiteSpaceBeforeCursor } from '@bangle.io/utils';
 
 import {
-  editorManagerSliceKey,
-  FOCUS_EDITOR_ON_LOAD_COOLDOWN,
-} from './constants';
-import {
-  didSomeEditorChange,
-  forEachEditor,
-  getEditor,
-  updateInitialSelection,
+  incrementDisableEditingCounter,
   updateScrollPosition,
-} from './operations';
-import type { SideEffect } from './types';
+  updateSelection,
+} from './actions';
+import { forEachEditor, nsmEditorManagerSlice, someEditor } from './slice';
+import { calculateSelection, getScrollParentElement } from './utils';
 
-export const initialSelectionEffect: SideEffect = () => {
-  return {
-    update(store, prevState) {
-      // save the selection and scroll position of any editor that was closed
-      for (let i = 0; i < MAX_OPEN_EDITORS; i++) {
-        const currentEditor = getEditor(i)(store.state);
-        const prevEditor = getEditor(i)(prevState);
-        if (prevEditor && currentEditor !== prevEditor) {
-          updateInitialSelection(i)(prevState, store.dispatch);
+const watchScrollPos = effect(function watchScrollPos(store) {
+  const updateScrollPos = () => {
+    const { mainEditors } = nsmEditorManagerSlice.get(store.state);
+    for (const editor of mainEditors) {
+      if (!editor) {
+        continue;
+      }
+      const { editorId, wsPath } = getEditorPluginMetadata(editor.view.state);
+
+      if (editorId == null) {
+        return;
+      }
+
+      const top = getScrollParentElement(editorId)?.scrollTop;
+
+      if (typeof top !== 'number') {
+        return;
+      }
+
+      store.dispatch(
+        updateScrollPosition({
+          editorId,
+          scrollPosition: top,
+          wsPath,
+        }),
+      );
+    }
+  };
+
+  const deb = debounceFn(updateScrollPos, {
+    wait: 300,
+    maxWait: 600,
+  });
+
+  const opts = {
+    capture: true,
+    passive: true,
+  };
+  const isWindow = typeof window !== 'undefined';
+
+  if (isWindow) {
+    window.addEventListener('scroll', deb, opts);
+  }
+
+  cleanup(store, () => {
+    deb.cancel();
+
+    if (isWindow) {
+      window.removeEventListener('scroll', deb, opts);
+    }
+  });
+});
+
+const checkForInactiveEditor = effect(function checkForInactiveEditor(store) {
+  let timer: NodeJS.Timeout | undefined;
+  const intervalId = setInterval(
+    () => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+
+      if (!nsmUISlice.get(store.state).widescreen) {
+        const { editingAllowed } = nsmEditorManagerSlice.get(store.state);
+
+        if (editingAllowed) {
+          timer = setTimeout(() => {
+            store.dispatch(incrementDisableEditingCounter());
+          }, 300);
         }
       }
     },
-  };
-};
+    // WARNING: do not reduce the interval below 500 as it can prevent manual toggling
+    // of editing.
+    // WARNING: when changing time, make sure to account for sleep time below
+    500,
+  );
+
+  cleanup(store, () => {
+    if (timer) {
+      clearTimeout(timer);
+    }
+    clearInterval(intervalId);
+  });
+});
+
+const toggleEditingEffect = effect(function toggleEditingEffect(store) {
+  void nsmPageSlice.track(store).isInactivePage;
+
+  const { disableEditingCounter } = nsmEditorManagerSlice.track(store);
+  const { widescreen } = nsmUISlice.track(store);
+
+  const { mainEditors, editingAllowed } = nsmEditorManagerSlice.get(
+    store.state,
+  );
+
+  if (widescreen || disableEditingCounter === undefined) {
+    return;
+  }
+
+  const noEditorInFocus = !someEditor(mainEditors, (editor) =>
+    editor.view.hasFocus(),
+  );
+
+  // TODO this isn't working and is always disabling editor
+  // if (noEditorInFocus || state.isInactivePage) {
+  //   if (noEditorInFocus) {
+  //     console.warn('disabling editing due to no editor in focus');
+  //   }
+  //   if (state.isInactivePage) {
+  //     console.warn('disabling editing due to inactive page');
+  //   }
+  //   dispatch(
+  //     toggleEditingDirect(
+  //       {
+  //         editingAllowed: state.editingAllowed,
+  //         mainEditors: state.mainEditors,
+  //       },
+  //       { editingAllowed: false },
+  //     ),
+  //   );
+  // }
+});
+
+const initialSelectionEffect = effect(function initialSelectionEffect(store) {
+  const { mainEditors } = nsmEditorManagerSlice.track(store);
+
+  for (const [index, editor] of mainEditors.entries()) {
+    if (!editor) {
+      continue;
+    }
+    const value = calculateSelection(index, editor);
+    store.dispatch(updateSelection(value));
+  }
+});
+
+const trimWhiteSpaceEffect = effect(function trimWhiteSpaceEffect(store) {
+  const { mainEditors } = nsmEditorManagerSlice.get(store.state);
+  const { isInactivePage } = nsmPageSlice.track(store);
+
+  if (isInactivePage) {
+    for (const editor of mainEditors) {
+      if (!editor) {
+        continue;
+      }
+      trimEndWhiteSpaceBeforeCursor()(editor.view.state, editor.view.dispatch);
+    }
+  }
+});
+
+const setEditorSearchQueryEffect = effect(function setEditorSearchQueryEffect(
+  store,
+) {
+  const { searchQuery } = nsmEditorManagerSlice.track(store);
+
+  forEachEditor(store.state, (editor) => {
+    search.updateSearchQuery(searchPluginKey, searchQuery)(
+      editor.view.state,
+      editor.view.dispatch,
+    );
+  });
+});
+
+const clearEditorSearchQueryEffect = effect(
+  function clearEditorSearchQueryEffect(store) {
+    void nsmPageSlice.track(store).wsName;
+
+    forEachEditor(store.state, (editor) => {
+      search.updateSearchQuery(searchPluginKey, undefined)(
+        editor.view.state,
+        editor.view.dispatch,
+      );
+    });
+  },
+);
+
+const getFocusedOnMountRef = ref(() => ({
+  focusedOnMount: false,
+}));
 
 // This effect does:
 // 1. Focus on the correct editor on initial mount.
 // 2. Automatically focus on any new mounted editor thereafter.
 // 3. If no current editor has any focus, focus on one automatically.
-//
-// We have a bit of complicated logic for the time period referred to as cooldown period.
-// This is the time right after we mount the effect and lasts until `FOCUS_EDITOR_ON_LOAD_COOLDOWN`.
-// During this time we want to only focus on the editorId mentioned in `focusedEditorId`
-// and avoid focusing any other editor.
-// Since we do not know when will the action for setting the editor
-// at `focusedEditorId` will be dispatched we pause auto focusing on any other editorId
-// for the cooldown period.
-export const focusEditorEffect: SideEffect = (state) => {
-  const initialSliceState = editorManagerSliceKey.getSliceState(state);
+const focusEffect = effect(
+  function focusEffect(store) {
+    const { lastOpenedEditor } = nsmEditorManagerSlice.track(store);
 
-  // This exists to preserve focused editor during page reloads
-  let editorNeedsFocusOnPageLoad: number | undefined =
-    typeof initialSliceState?.focusedEditorId === 'number'
-      ? initialSliceState?.focusedEditorId
-      : 0;
+    const { focusedEditorId, mainEditors } = nsmEditorManagerSlice.get(
+      store.state,
+    );
+    const { primaryWsPath, secondaryWsPath } = nsmPageSlice.get(store.state);
 
-  let mounted = Date.now();
+    const focusedRef = getFocusedOnMountRef(store);
 
-  return {
-    update(store, prevState) {
-      // // Only continue if an editor has been created or destroyed
-      if (prevState && !didSomeEditorChange(prevState)(store.state)) {
-        return;
+    if (primaryWsPath == null && secondaryWsPath == null) {
+      return;
+    }
+
+    const isPrimaryReady = Boolean(
+      primaryWsPath ? mainEditors[PRIMARY_EDITOR_INDEX] : true,
+    );
+    const isSecondaryReady = Boolean(
+      secondaryWsPath ? mainEditors[SECONDARY_EDITOR_INDEX] : true,
+    );
+
+    if (!isPrimaryReady && !isSecondaryReady) {
+      return;
+    }
+    // if we have already focused on mount, then we can continue focusing
+    // on the last opened editor
+    if (focusedRef.current.focusedOnMount) {
+      lastOpenedEditor?.editor.focusView();
+
+      return;
+    }
+
+    if (isPrimaryReady && isSecondaryReady) {
+      focusedRef.current.focusedOnMount = true;
+
+      if (typeof focusedEditorId === 'number') {
+        // if mounting for the first time, focus on the focusedEditorId
+        mainEditors[focusedEditorId]?.focusView();
+      } else {
+        lastOpenedEditor?.editor.focusView();
       }
+    }
+  },
+  { deferred: false },
+);
 
-      const cooldown = Date.now() - mounted < FOCUS_EDITOR_ON_LOAD_COOLDOWN;
-
-      for (let i = 0; i < MAX_OPEN_EDITORS; i++) {
-        const currentEditor = getEditor(i)(store.state);
-        const prevEditor = prevState && getEditor(i)(prevState);
-
-        const isNewEditor =
-          currentEditor &&
-          !currentEditor.destroyed &&
-          prevEditor !== currentEditor;
-
-        if (editorNeedsFocusOnPageLoad === i && isNewEditor) {
-          currentEditor.focusView();
-          editorNeedsFocusOnPageLoad = undefined;
-          return;
-        }
-
-        // do not attempt to focus on any newly mounted editor, if conditions do not match
-        // This is so as to avoid competing with the `editorNeedsFocusOnPageLoad`.
-        if (!editorNeedsFocusOnPageLoad && isNewEditor && !cooldown) {
-          currentEditor.focusView();
-          return;
-        }
-      }
-
-      if (cooldown) {
-        return;
-      }
-
-      // If we we reach here check if none of the opened
-      // editor has focus and focus one of them if needed.
-      let someEditorHasFocus = false;
-      let editorToFocus: BangleEditor | undefined;
-
-      forEachEditor((editor) => {
-        if (editor?.view.hasFocus()) {
-          someEditorHasFocus = true;
-        }
-        if (editor?.destroyed === false) {
-          editorToFocus = editor;
-        }
-      })(store.state);
-
-      if (!someEditorHasFocus) {
-        editorToFocus?.focusView();
-      }
-    },
-  };
-};
-
-// Preserve the scroll state when editors unmount
-// note: we cannot simply update the scroll position when editor unmounts
-// like selection because the dom is no longer having height when the editor
-// unmounts
-export const watchEditorScrollEffect: SideEffect = () => {
-  return {
-    deferredOnce(store, abortSignal) {
-      const updateScrollPos = () => {
-        for (let i = 0; i < MAX_OPEN_EDITORS; i++) {
-          const currentEditor = getEditor(i)(store.state);
-          if (!currentEditor?.destroyed) {
-            updateScrollPosition(i)(store.state, store.dispatch);
-          }
-        }
-      };
-
-      const deb = debounceFn(updateScrollPos, {
-        wait: 300,
-        maxWait: 600,
-      });
-
-      const opts = {
-        capture: true,
-        passive: true,
-      };
-      const isWindow = typeof window !== 'undefined';
-
-      if (isWindow) {
-        window.addEventListener('scroll', deb, opts);
-      }
-
-      abortSignal.addEventListener('abort', () => {
-        deb.cancel();
-        if (isWindow) {
-          window.removeEventListener('scroll', deb, opts);
-        }
-      });
-    },
-  };
-};
-
-export const trimWhiteSpaceEffect: SideEffect = () => {
-  return {
-    update: (store, prevState) => {
-      const pageTransitioned = pageLifeCycleTransitionedTo(
-        ['passive', 'hidden'],
-        prevState,
-      )(store.state);
-
-      if (pageTransitioned) {
-        forEachEditor((editor) => {
-          if (!editor?.destroyed && editor?.view.hasFocus()) {
-            // To avoid cursor jumping across due markdown whitespace elimination
-            // this removes the white space to prevent cursor jumping.
-            // Not ideal though
-            trimEndWhiteSpaceBeforeCursor()(
-              editor.view.state,
-              editor.view.dispatch,
-            );
-          }
-        })(store.state);
-      }
-    },
-  };
-};
+export const nsmEditorEffects = [
+  watchScrollPos,
+  checkForInactiveEditor,
+  toggleEditingEffect,
+  initialSelectionEffect,
+  trimWhiteSpaceEffect,
+  focusEffect,
+  setEditorSearchQueryEffect,
+  clearEditorSearchQueryEffect,
+];

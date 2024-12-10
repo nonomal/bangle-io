@@ -1,62 +1,47 @@
 /**
- * @jest-environment jsdom
+ * @jest-environment @bangle.io/jsdom-env
  */
 /** @jsx psx */
 /// <reference path="../../../missing-test-types.d.ts" />
 /// <reference path="./missing-test-types.d.ts" />
 
-import { act, renderHook } from '@testing-library/react-hooks';
-
-import { defaultPlugins, defaultSpecs } from '@bangle.dev/all-base-components';
-import { SpecRegistry } from '@bangle.dev/core';
+import { psx } from '@bangle.dev/test-helpers';
+import { testEditor, setupTestExtension } from '@bangle.io/test-utils-2';
 import type { Node } from '@bangle.dev/pm';
-import { psx, renderTestEditor } from '@bangle.dev/test-helpers';
 
-import { getNote, useWorkspaceContext } from '@bangle.io/slice-workspace';
-import { getUseWorkspaceContextReturn } from '@bangle.io/test-utils';
-import { sleep } from '@bangle.io/utils';
+import noteTags from '../index';
+import { _listTags, listAllTags } from '../search';
+import { createWsPath } from '@bangle.io/ws-path';
 
-import { editorTagSpec } from '../editor-tag';
-import { _listTags, listAllTags, useSearchAllTags } from '../search';
-
-let getNoteMock = getNote as jest.MockedFunction<typeof getNote>;
-
-jest.mock('@bangle.io/slice-workspace', () => {
-  const workspaceThings = jest.requireActual('@bangle.io/slice-workspace');
-  return {
-    ...workspaceThings,
-    bangleStore: {
-      state: {},
-      dispatch: {},
-    },
-    getNote: jest.fn(() => async () => {}),
-    useWorkspaceContext: jest.fn(),
-  };
-});
-
-const specRegistry = new SpecRegistry([...defaultSpecs(), editorTagSpec()]);
-const testEditor = renderTestEditor({
-  specRegistry,
-  plugins: defaultPlugins(),
-});
-
-let useWorkspaceContextMock = useWorkspaceContext as jest.MockedFunction<
-  typeof useWorkspaceContext
->;
+let abortController = new AbortController();
 
 beforeEach(() => {
-  getNoteMock.mockImplementation(() => async () => undefined);
-
-  useWorkspaceContextMock.mockImplementation(() => {
-    return {
-      ...getUseWorkspaceContextReturn,
-    };
-  });
+  abortController = new AbortController();
 });
 
+afterEach(async () => {
+  abortController.abort();
+});
+
+function setup() {
+  const ctx = setupTestExtension({
+    extensions: [noteTags],
+    abortSignal: abortController.signal,
+    editor: true,
+  });
+
+  const { renderDoc } = testEditor(ctx.eternalVars);
+
+  return {
+    renderDoc,
+  };
+}
+
 describe('search tag in a doc', () => {
-  test('one tag', async () => {
-    const { view } = testEditor(
+  test('works', () => {
+    const { renderDoc } = setup();
+
+    const { view } = renderDoc(
       <doc>
         <para>
           Hello <tag tagValue="hi" />
@@ -68,7 +53,9 @@ describe('search tag in a doc', () => {
   });
 
   test('two same tag', async () => {
-    const { view } = testEditor(
+    const { renderDoc } = setup();
+
+    const { view } = renderDoc(
       <doc>
         <para>
           <tag tagValue="hi" /> Hello <tag tagValue="hi" />
@@ -80,7 +67,9 @@ describe('search tag in a doc', () => {
   });
 
   test('many tags same tag', async () => {
-    const { view } = testEditor(
+    const { renderDoc } = setup();
+
+    const { view } = renderDoc(
       <doc>
         <para>
           <tag tagValue="hi" /> Hello <tag tagValue="hi2" />
@@ -102,7 +91,8 @@ describe('search tag in a doc', () => {
 
 describe('search tag across wsPaths', () => {
   test('works', async () => {
-    const { view: view1 } = testEditor(
+    const { renderDoc } = setup();
+    const { view: view1 } = renderDoc(
       <doc>
         <para>
           Hello <tag tagValue="hi" />
@@ -110,7 +100,7 @@ describe('search tag across wsPaths', () => {
       </doc>,
     );
 
-    const { view: view2 } = testEditor(
+    const { view: view2 } = renderDoc(
       <doc>
         <para>
           Hello <tag tagValue="second" /> <tag tagValue="third" />
@@ -118,7 +108,7 @@ describe('search tag across wsPaths', () => {
       </doc>,
     );
 
-    const { view: view3 } = testEditor(
+    const { view: view3 } = renderDoc(
       <doc>
         <heading>
           Hello <tag tagValue="fourth" /> brah <tag tagValue="fifth" />
@@ -141,14 +131,20 @@ describe('search tag across wsPaths', () => {
       throw new Error('Unknown wsPath ' + wsPath);
     });
 
-    const tagsSet = await listAllTags(['t:1', 't:2', 't:3'], callback, signal);
+    const tagsSet = await listAllTags(
+      ['t:1', 't:2', 't:3'].map((t) => createWsPath(t)),
+      callback,
+      signal,
+    );
 
     expect(tagsSet).toEqual(['hi', 'second', 'third', 'fourth', 'fifth']);
     expect(callback).toBeCalledTimes(3);
   });
 
   test('aborts correctly', async () => {
-    const { view: view1 } = testEditor(
+    const { renderDoc } = setup();
+
+    const { view: view1 } = renderDoc(
       <doc>
         <para>
           Hello <tag tagValue="hi" />
@@ -156,7 +152,7 @@ describe('search tag across wsPaths', () => {
       </doc>,
     );
 
-    const { view: view2 } = testEditor(
+    const { view: view2 } = renderDoc(
       <doc>
         <para>
           Hello <tag tagValue="second" /> <tag tagValue="third" />
@@ -164,7 +160,7 @@ describe('search tag across wsPaths', () => {
       </doc>,
     );
 
-    const { view: view3 } = testEditor(
+    const { view: view3 } = renderDoc(
       <doc>
         <heading>
           Hello <tag tagValue="fourth" /> brah <tag tagValue="fifth" />
@@ -181,6 +177,7 @@ describe('search tag across wsPaths', () => {
       }
       if (wsPath === 't:2') {
         controller.abort();
+
         return new Promise((res) => setTimeout(res, 0)).then(() => {
           return view2.state.doc;
         });
@@ -190,128 +187,14 @@ describe('search tag across wsPaths', () => {
       }
       throw new Error('Unknown wsPath ' + wsPath);
     });
-    const fun = () => listAllTags(['t:1', 't:2', 't:3'], callback, signal);
+    const fun = () =>
+      listAllTags(
+        ['t:1', 't:2', 't:3'].map((t) => createWsPath(t)),
+        callback,
+        signal,
+      );
 
     await expect(fun()).rejects.toThrowErrorMatchingInlineSnapshot(`"Aborted"`);
     expect(callback).toBeCalledTimes(2);
-  });
-});
-
-describe('useSearchAllTags', () => {
-  let abortSpy: jest.SpyInstance;
-  let delayGetNotes = false;
-
-  beforeEach(() => {
-    abortSpy = jest.spyOn(AbortController.prototype, 'abort');
-  });
-  afterEach(() => {
-    delayGetNotes = false;
-    abortSpy.mockRestore();
-  });
-
-  beforeEach(() => {
-    const { view: view1 } = testEditor(
-      <doc>
-        <para>
-          Hello <tag tagValue="hi" />
-        </para>
-      </doc>,
-    );
-
-    const { view: view2 } = testEditor(
-      <doc>
-        <para>
-          Hello <tag tagValue="second" /> <tag tagValue="third" />
-        </para>
-      </doc>,
-    );
-
-    const { view: view3 } = testEditor(
-      <doc>
-        <heading>
-          Hello <tag tagValue="fourth" /> brah <tag tagValue="fifth" />
-        </heading>
-      </doc>,
-    );
-    getNoteMock.mockImplementation((wsPath): any => async () => {
-      if (delayGetNotes) {
-        await sleep(20);
-      }
-      if (wsPath === 't:1') {
-        return view1.state.doc;
-      }
-      if (wsPath === 't:2') {
-        return view2.state.doc;
-      }
-      if (wsPath === 't:3') {
-        return view3.state.doc;
-      }
-      throw new Error('Unknown wsPath ' + wsPath);
-    });
-
-    const noteWsPaths = ['t:1', 't:2', 't:3'];
-    useWorkspaceContextMock.mockImplementation(() => {
-      return {
-        ...getUseWorkspaceContextReturn,
-        noteWsPaths: noteWsPaths,
-      };
-    });
-  });
-
-  test('works', async () => {
-    let result: any, waitForNextUpdate: any;
-    act(() => {
-      ({ result, waitForNextUpdate } = renderHook(() =>
-        useSearchAllTags('', true),
-      ));
-    });
-
-    await waitForNextUpdate();
-    expect(result?.current.sort()).toEqual(
-      ['hi', 'third', 'fifth', 'second', 'fourth'].sort(),
-    );
-  });
-
-  test('no result when not visible', async () => {
-    let result: any;
-    act(() => {
-      ({ result } = renderHook(() => useSearchAllTags('', false)));
-    });
-
-    expect(result?.current).toEqual([]);
-  });
-
-  test('filters correctly', async () => {
-    let result: any, waitForNextUpdate: any;
-    act(() => {
-      ({ result, waitForNextUpdate } = renderHook(() =>
-        useSearchAllTags('i', true),
-      ));
-    });
-
-    await waitForNextUpdate();
-
-    expect(abortSpy).toBeCalledTimes(0);
-
-    expect(result?.current).toEqual(['hi', 'third', 'fifth']);
-  });
-
-  test('aborts correctly', async () => {
-    let result: any, rerender: any;
-    delayGetNotes = true;
-    act(() => {
-      ({ result, rerender } = renderHook(
-        ({ query, visible }) => useSearchAllTags(query, visible),
-        {
-          initialProps: { query: '', visible: true },
-        },
-      ));
-    });
-
-    rerender({ query: 'i', visible: false });
-
-    expect(abortSpy).toBeCalledTimes(1);
-
-    expect(result?.current).toEqual([]);
   });
 });

@@ -1,4 +1,6 @@
-<p class="selected-node">
+<p
+  class="B-editor-common_selected-node"
+>
   life is good
   <span
     data-bangle-name="emoji"

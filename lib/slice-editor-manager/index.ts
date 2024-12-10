@@ -1,9 +1,18 @@
-export { editorManagerSliceKey } from './constants';
 export {
-  editorManagerSlice,
-  initialEditorSliceState,
-} from './editor-manager-slice';
-export * from './EditorManagerContext';
-export * from './effects';
-export * from './operations';
-export * from './types';
+  onFocusUpdate,
+  setEditor,
+  toggleEditing,
+  updateQueryAction,
+  updateSelection,
+} from './actions';
+export { nsmEditorEffects } from './effects';
+export {
+  focusEditorIfNotFocused,
+  forEachEditor,
+  getEditor,
+  getInitialSelection,
+  nsmEditorManagerSlice,
+  persistState,
+  setEditorScrollPos,
+} from './slice';
+export type { EditorIdType } from './types';

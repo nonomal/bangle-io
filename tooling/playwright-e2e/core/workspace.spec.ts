@@ -1,6 +1,12 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
+
+import {
+  PRIMARY_EDITOR_INDEX,
+  SECONDARY_EDITOR_INDEX,
+} from '@bangle.io/constants';
 
 import { resolvePath } from '../bangle-helpers';
+import { withBangle as test } from '../fixture-with-bangle';
 import {
   createNewNote,
   createWorkspace,
@@ -11,13 +17,14 @@ import {
   pushWsPathToSecondary,
   runOperation,
   waitForEditorFocus,
+  waitForNotification,
 } from '../helpers';
 
-test.beforeEach(async ({ page, baseURL }, testInfo) => {
-  await page.goto(baseURL!, { waitUntil: 'networkidle' });
+test.beforeEach(async ({ bangleApp }, testInfo) => {
+  await bangleApp.open();
 });
 
-test.describe.parallel('workspace', () => {
+test.describe('workspace', () => {
   test('Create a new workspace when already in a workspace', async ({
     page,
   }) => {
@@ -39,20 +46,16 @@ test.describe.parallel('workspace', () => {
   test('Rename note', async ({ page, baseURL }) => {
     const wsName1 = await createWorkspace(page);
     const n1 = await createNewNote(page, wsName1, 'file-1');
-
     await runOperation(
       page,
-      'operation::@bangle.io/core-operations:RENAME_ACTIVE_NOTE',
+      'operation::@bangle.io/core-extension:RENAME_ACTIVE_NOTE',
     );
 
-    await expect(
-      page.locator('.universal-palette-container input[aria-label]'),
-    ).toHaveValue(resolvePath(n1).filePath);
-
-    await page.fill(
-      '.universal-palette-container input[aria-label]',
-      'file-1-renamed',
+    await expect(page.getByPlaceholder('Enter the new name')).toHaveValue(
+      resolvePath(n1).filePath,
     );
+
+    await page.getByPlaceholder('Enter the new name').fill('file-1-renamed');
 
     await Promise.all([page.waitForNavigation(), page.keyboard.press('Enter')]);
 
@@ -81,13 +84,15 @@ test.describe.parallel('workspace', () => {
       }),
     ]);
 
-    expect(await page.url()).toBe(
-      `${baseURL}/ws-not-found/random-wrong-wsname`,
-    );
+    await expect(page).toHaveURL(`${baseURL}/ws-not-found/random-wrong-wsname`);
 
     expect(await page.$eval('body', (el) => el.innerText)).toContain(
       `not found`,
     );
+
+    expect(await page.screenshot()).toMatchSnapshot({
+      maxDiffPixels: 20,
+    });
   });
 
   test('Opening an invalid file name', async ({ page, baseURL }) => {
@@ -103,11 +108,13 @@ test.describe.parallel('workspace', () => {
       }),
     ]);
 
-    expect(await page.url()).toBe(`${baseURL}/ws-invalid-path/${wsName1}`);
+    await expect(page).toHaveURL(`${baseURL}/ws-invalid-path/${wsName1}`);
 
-    expect(await page.$eval('body', (el) => el.innerText)).toContain(
-      `🙈 Invalid path`,
-    );
+    await expect(page.locator('body')).toContainText(`🙈 Invalid path`);
+
+    expect(await page.screenshot()).toMatchSnapshot({
+      maxDiffPixels: 20,
+    });
   });
 
   test('Opening an invalid file name in secondary', async ({
@@ -127,7 +134,7 @@ test.describe.parallel('workspace', () => {
       ),
     ]);
 
-    expect(await page.url()).toBe(`${baseURL}/ws-invalid-path/${wsName1}`);
+    await expect(page).toHaveURL(`${baseURL}/ws-invalid-path/${wsName1}`);
 
     expect(await page.$eval('body', (el) => el.innerText)).toContain(
       `🙈 Invalid path`,
@@ -150,7 +157,9 @@ test.describe.parallel('workspace', () => {
 
     await page2.goto(baseURL!, { waitUntil: 'networkidle' });
 
-    await expect(page2).toHaveURL(new RegExp(wsName1));
+    await expect(page2).toHaveURL(`${baseURL}/landing`);
+
+    await expect(page2.locator(`text=${wsName1} (last opened)`)).toBeVisible();
   });
 
   test('deleting a note', async ({ page, baseURL }) => {
@@ -167,7 +176,7 @@ test.describe.parallel('workspace', () => {
       page.waitForNavigation(),
       runOperation(
         page,
-        'operation::@bangle.io/core-operations:DELETE_ACTIVE_NOTE',
+        'operation::@bangle.io/core-extension:DELETE_ACTIVE_NOTE',
       ),
     ]);
 
@@ -188,7 +197,7 @@ test.describe.parallel('workspace', () => {
 
     await pushWsPathToSecondary(page, n1);
 
-    await waitForEditorFocus(page, 1, { wsPath: n1 });
+    await waitForEditorFocus(page, SECONDARY_EDITOR_INDEX, { wsPath: n1 });
 
     page.on('dialog', (dialog) => dialog.accept());
 
@@ -196,7 +205,7 @@ test.describe.parallel('workspace', () => {
       page.waitForNavigation(),
       runOperation(
         page,
-        'operation::@bangle.io/core-operations:DELETE_ACTIVE_NOTE',
+        'operation::@bangle.io/core-extension:DELETE_ACTIVE_NOTE',
       ),
     ]);
 
@@ -218,7 +227,10 @@ test.describe.parallel('workspace', () => {
     await expect(page).toHaveURL(new RegExp(resolvePath(n2).fileName));
 
     await pushWsPathToSecondary(page, n1);
-    await getEditorLocator(page, 0, { focus: true, wsPath: n2 });
+    await getEditorLocator(page, PRIMARY_EDITOR_INDEX, {
+      focus: true,
+      wsPath: n2,
+    });
 
     page.on('dialog', (dialog) => dialog.accept());
 
@@ -226,7 +238,7 @@ test.describe.parallel('workspace', () => {
       page.waitForNavigation(),
       runOperation(
         page,
-        'operation::@bangle.io/core-operations:DELETE_ACTIVE_NOTE',
+        'operation::@bangle.io/core-extension:DELETE_ACTIVE_NOTE',
       ),
     ]);
     await expect(page).toHaveURL(
@@ -234,5 +246,27 @@ test.describe.parallel('workspace', () => {
     );
     await longSleep(100);
     expect(await getAllWsPaths(page)).toEqual([n1]);
+  });
+});
+
+test.describe('in invalid path', () => {
+  test('creating new note', async ({ page, baseURL }) => {
+    const wsName1 = await createWorkspace(page);
+
+    await Promise.all([
+      page.waitForNavigation({
+        timeout: 5000,
+        waitUntil: 'load',
+      }),
+      page.goto(baseURL + `/ws/${wsName1}/wrong-ws-path`, {
+        waitUntil: 'load',
+      }),
+    ]);
+
+    await expect(page).toHaveURL(new RegExp('/ws-invalid-path/' + wsName1));
+
+    await runOperation(page, 'operation::@bangle.io/core-extension:NEW_NOTE');
+
+    await waitForNotification(page, 'Please first select a workspace');
   });
 });

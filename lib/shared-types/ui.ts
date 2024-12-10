@@ -1,13 +1,6 @@
-import type { SerialOperationNameType } from './extension-registry';
+export type { NotificationPayloadType } from '@bangle.io/constants';
 
-export interface NotificationPayloadType {
-  uid: string;
+export interface GenericErrorModalMetadata {
   title: string;
-  content?: string;
-  severity?: 'error' | 'warning' | 'info' | 'success';
-  buttons?: Array<{
-    title: string;
-    hint?: string;
-    operation: SerialOperationNameType;
-  }>;
+  description: string;
 }

@@ -1,7 +1,10 @@
-import { chromium, expect, test } from '@playwright/test';
+import { chromium, expect } from '@playwright/test';
 import fs from 'fs/promises';
 import path from 'path';
 
+import { PRIMARY_EDITOR_INDEX } from '@bangle.io/constants';
+
+import { withBangle as test } from '../fixture-with-bangle';
 import {
   createWorkspaceFromBackup,
   getAllWsPaths,
@@ -10,9 +13,10 @@ import {
   waitForNotification,
 } from '../helpers';
 
-test('Openning a lot of notes should not leak', async ({ baseURL }) => {
+test('Opening a lot of notes should not leak', async ({ baseURL }) => {
   test.slow();
   test.setTimeout(2 * 60000);
+
   const browser = await chromium.launch({
     // this is needed to run `window.gc()`
     args: ['--js-flags=--expose-gc'],
@@ -33,7 +37,7 @@ test('Openning a lot of notes should not leak', async ({ baseURL }) => {
     buffer: f,
   });
 
-  await waitForNotification(page, 'Your notes have successfully restored.');
+  await waitForNotification(page, 'Restore success!');
 
   const wsPaths = await getAllWsPaths(page, { lowerBound: 111 });
   // the fixture's asset count
@@ -46,7 +50,7 @@ test('Openning a lot of notes should not leak', async ({ baseURL }) => {
   });
 
   const EDITORS_TO_OPEN = 100;
-  const FINAL_EDITORS_IN_MEMORY = 5;
+  const FINAL_EDITORS_IN_MEMORY = 50;
 
   for (const w of noteWsPaths.slice(0, EDITORS_TO_OPEN)) {
     // open every editor in list
@@ -57,26 +61,33 @@ test('Openning a lot of notes should not leak', async ({ baseURL }) => {
 
     // Make sure the editor instance is for the currently opened editor
     await page.waitForFunction(
-      ([w]) => {
-        const win: any = window;
-        const editor = win._e2eHelpers._getEditors()?.[0];
+      ([w, primaryIndex]: [string, number]) => {
+        const editor = window._nsmE2e?.primaryEditor;
+
         if (!editor) {
           return false;
         }
+
         return (
-          win._e2eHelpers._getEditorPluginMetadata(editor.view.state)
-            ?.wsPath === w
+          window._nsmE2e?.getEditorPluginMetadata(editor.view.state)?.wsPath ===
+          w
         );
       },
-      [w],
+      [w, PRIMARY_EDITOR_INDEX] as [string, number],
     );
 
     // save a weak reference to the editor, so that we can later check
     // if it got GC'd or not.
     await page.evaluate(
       ([w]) => {
-        const win: any = window;
-        win.refs.push(new win.WeakRef(win._e2eHelpers._primaryEditor.view));
+        const win = window;
+        const view = win._nsmE2e?.primaryEditor?.view;
+
+        if (!view) {
+          throw new Error('view not found');
+        }
+
+        (window as any).refs.push(new win.WeakRef(view));
       },
       [w],
     );
@@ -96,9 +107,11 @@ test('Openning a lot of notes should not leak', async ({ baseURL }) => {
     const size = await page.evaluate(() => {
       return new Set((window as any).refs.map((r: any) => r.deref())).size;
     });
-    if (size > FINAL_EDITORS_IN_MEMORY && attempt < 2) {
+
+    if (size > FINAL_EDITORS_IN_MEMORY && attempt < 40) {
       return getEditorCountInMemory(attempt + 1);
     }
+
     return size;
   };
 

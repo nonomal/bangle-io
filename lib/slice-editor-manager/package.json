@@ -20,31 +20,33 @@
   "module": "index.ts",
   "publishConfig": {},
   "dependencies": {
-    "@bangle.dev/core": "0.28.8",
-    "@bangle.dev/pm": "0.28.8",
-    "@bangle.dev/utils": "0.28.8",
+    "@bangle.dev/core": "0.32.0",
+    "@bangle.dev/pm": "0.32.0",
+    "@bangle.dev/search": "0.32.0",
+    "@bangle.dev/utils": "0.32.0",
     "@bangle.io/bangle-store-context": "workspace:*",
-    "@bangle.io/config": "workspace:*",
     "@bangle.io/constants": "workspace:*",
     "@bangle.io/create-store": "workspace:*",
+    "@bangle.io/editor-common": "workspace:*",
+    "@bangle.io/mini-js-utils": "workspace:*",
+    "@bangle.io/nsm-3": "workspace:*",
     "@bangle.io/shared-types": "workspace:*",
     "@bangle.io/slice-page": "workspace:*",
-    "@bangle.io/slice-workspace": "workspace:*",
+    "@bangle.io/slice-ui": "workspace:*",
     "@bangle.io/utils": "workspace:*",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
-    "reselect": "^4.1.5",
-    "tslib": "^2.3.1",
-    "type-fest": "^2.12.0",
-    "typescript": "^4.5.5"
+    "tslib": "2.6.0",
+    "typescript": "5.1.6"
   },
   "devDependencies": {
-    "@bangle.dev/all-base-components": "0.28.8",
-    "@bangle.dev/test-helpers": "0.28.8",
+    "@bangle.dev/all-base-components": "0.32.0",
+    "@bangle.dev/test-helpers": "0.32.0",
     "@bangle.io/test-utils": "workspace:*",
-    "@testing-library/dom": "^8.11.3",
-    "@types/react": "^17.0.39",
-    "@types/react-dom": "^17.0.13"
+    "@bangle.io/test-utils-2": "workspace:*",
+    "@testing-library/dom": "^8.20.1",
+    "@types/react": "^17.0.49",
+    "@types/react-dom": "^17.0.17"
   },
   "license": "AGPL-3.0-or-later"
 }

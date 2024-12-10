@@ -10,11 +10,13 @@ const unique = generateUid(4);
 class ObjectUID extends WeakMap {
   get(obj: any): string {
     let uid = super.get(obj);
+
     if (uid) {
       return uid;
     }
     uid = (counter++).toString() + '-' + unique;
     this.set(obj, uid);
+
     return uid;
   }
 }

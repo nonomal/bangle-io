@@ -1,14 +1,13 @@
+import type { EditorView } from '@bangle.dev/pm';
 import {
-  __parseFromClipboard,
-  __serializeForClipboard,
-  // Cant get the type to work
-  // @ts-ignore
-} from 'prosemirror-view';
-
-import { DOMSerializer, EditorView, Slice } from '@bangle.dev/pm';
+  DOMSerializer,
+  parseFromClipboard,
+  serializeForClipboard,
+  Slice,
+} from '@bangle.dev/pm';
 
 export function sliceManualPaste(editorView: EditorView, slice: Slice) {
-  const { dom } = __serializeForClipboard(editorView, slice);
+  const { dom } = serializeForClipboard(editorView, slice);
   let pasteString = dom.innerHTML;
   let str = `<meta charset="utf-8">${pasteString}`;
   htmlManualPaste(editorView, str);
@@ -27,12 +26,12 @@ export function htmlManualPaste(editorView: EditorView, htmlStr: string) {
   function doPaste(
     view: EditorView,
     text: string | null,
-    html: string,
+    html: string | null,
     e: any,
   ) {
-    let slice = __parseFromClipboard(
+    let slice = parseFromClipboard(
       view,
-      text,
+      text || '',
       html,
       (view as any).shiftKey,
       view.state.selection.$from,
@@ -67,6 +66,7 @@ const createEvent = (
   options: { bubbles?: boolean; cancelable?: boolean; composed?: boolean } = {},
 ) => {
   let event;
+
   if (options.bubbles === undefined) {
     options.bubbles = true;
   }

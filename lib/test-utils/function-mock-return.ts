@@ -7,53 +7,38 @@
 //  // override things
 //  wsPath: 'xyz:sys.md'
 // }
-import type { Mutable } from 'type-fest';
+import type { Writable } from 'type-fest';
 
-import { initialBangleStore } from '@bangle.io/bangle-store-context';
+import { initialNsmStore } from '@bangle.io/bangle-store-context';
 import { EditorDisplayType } from '@bangle.io/constants';
-import {
-  initialEditorSliceState,
-  useEditorManagerContext,
-} from '@bangle.io/slice-editor-manager';
-import { initialState, useUIManagerContext } from '@bangle.io/slice-ui';
-import type { useWorkspaceContext } from '@bangle.io/slice-workspace';
+import { initialState } from '@bangle.io/slice-ui';
 import type { getEditorPluginMetadata } from '@bangle.io/utils';
-import { OpenedWsPaths } from '@bangle.io/ws-path';
+import { createWsPath, OpenedWsPaths } from '@bangle.io/ws-path';
 
 export const getEditorPluginMetadataReturn: ReturnType<
   typeof getEditorPluginMetadata
 > = {
-  dispatchSerialOperation: jest.fn(),
+  dispatchSerialOperation: typeof jest === 'undefined' ? () => {} : jest.fn(),
   editorDisplayType: EditorDisplayType.Page,
-  bangleStore: initialBangleStore,
-  wsPath: 'test-workspace:my-test-note.md',
+  wsPath: createWsPath('test-workspace:my-test-note.md'),
+  nsmStore: initialNsmStore,
+  createdAt: 0,
+  collabMessageBus: {} as any,
 };
 
-export const getUseUIManagerContextReturn: Mutable<
-  ReturnType<typeof useUIManagerContext>
-> = {
+export const getUseUIManagerContextReturn: Writable<any> = {
   ...initialState,
-  dispatch: jest.fn(() => {}),
-  bangleStore: initialBangleStore,
+  dispatch: typeof jest === 'undefined' ? () => {} : jest.fn(() => {}),
+  bangleStore: {} as any,
 };
 
-export const getUseWorkspaceContextReturn: Mutable<
-  ReturnType<typeof useWorkspaceContext>
-> = {
-  wsName: 'test-ws',
-  recentlyUsedWsPaths: [],
-  wsPaths: [],
+export const getUseWorkspaceContextReturn: Writable<ReturnType<any>> = {
+  bangleStore: {} as any,
+  cachedWorkspaceInfo: undefined,
   noteWsPaths: [],
   openedWsPaths: OpenedWsPaths.createEmpty(),
-  bangleStore: initialBangleStore,
+  recentlyUsedWsPaths: [],
   refreshCounter: 0,
-  error: undefined,
-  workspacesInfo: undefined,
-};
-
-export const getUseEditorManagerContextReturn: ReturnType<
-  typeof useEditorManagerContext
-> = {
-  ...initialEditorSliceState,
-  bangleStore: initialBangleStore,
+  wsName: 'test-ws',
+  wsPaths: [],
 };

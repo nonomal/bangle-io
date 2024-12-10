@@ -1,4 +1,5 @@
-import { MutableRefObject, useEffect } from 'react';
+import type { MutableRefObject } from 'react';
+import { useEffect } from 'react';
 
 export function useStickyNavigation(
   widescreen: boolean,
@@ -6,9 +7,11 @@ export function useStickyNavigation(
 ) {
   useEffect(() => {
     let callback: undefined | (() => void);
+
     if (!widescreen && activitybarRef.current) {
       callback = setupStickyNavigation(activitybarRef.current);
     }
+
     return () => {
       callback?.();
     };
@@ -17,15 +20,14 @@ export function useStickyNavigation(
 
 function setupStickyNavigation(element: HTMLElement) {
   const removeUp = () => {
-    element?.classList.add('down');
-    element?.classList.remove('up');
+    element.classList.add('B-ui-dhancha_down');
+    element.classList.remove('B-ui-dhancha_up');
   };
 
   const addUp = () => {
-    element?.classList.add('up');
-    element?.classList.remove('down');
+    element.classList.add('B-ui-dhancha_up');
+    element.classList.remove('B-ui-dhancha_down');
   };
-  let previousY = 9999;
 
   const updateNav = () => {
     // iOS scrolls to make sure the viewport fits, don't hide the input then
@@ -38,10 +40,9 @@ function setupStickyNavigation(element: HTMLElement) {
       return;
     }
 
-    const goingUp = window.pageYOffset > 1 && window.pageYOffset > previousY;
-    previousY = window.pageYOffset;
+    const isNotAtTop = window.pageYOffset > 10;
 
-    if (goingUp) {
+    if (isNotAtTop) {
       removeUp();
     } else {
       addUp();

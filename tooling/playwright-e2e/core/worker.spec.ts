@@ -1,64 +1,82 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
 
-import { createNewNote, createWorkspace, waitForEditorFocus } from '../helpers';
+import { PRIMARY_EDITOR_INDEX } from '@bangle.io/constants';
 
-test.beforeEach(async ({ page, baseURL }, testInfo) => {
-  await page.goto(baseURL!, { waitUntil: 'networkidle' });
+import { testWithConfig as test } from '../fixture-test-with-config';
+import {
+  createNewNote,
+  createWorkspace,
+  sleep,
+  waitForEditorFocus,
+} from '../helpers';
+
+test.beforeEach(async ({ bangleApp }, testInfo) => {
+  await bangleApp.open();
 });
 
-test.describe.parallel('worker', () => {
+test.describe('worker', () => {
+  test.use({
+    bangleDebugConfig: {
+      writeSlowDown: 300,
+    },
+  });
+
+  test('worker health check', async ({ page }) => {
+    await createWorkspace(page);
+
+    expect(page.workers()).toHaveLength(1);
+
+    const result = await page.evaluate(() => window._nsmE2e?.e2eHealthCheck());
+
+    expect(result).toBe(true);
+  });
+
   test('Typing a note should enable blockReload', async ({ page }) => {
     const wsName1 = await createWorkspace(page);
 
     const wsPath = await createNewNote(page, wsName1, 'test-note.md');
 
-    await waitForEditorFocus(page, 0, { wsPath });
+    await waitForEditorFocus(page, PRIMARY_EDITOR_INDEX, { wsPath });
+
+    await sleep();
 
     await page.keyboard.type('Hello _world_!', { delay: 10 });
 
     const pageSliceState = async () =>
-      JSON.parse(
-        await page.evaluate(() => {
-          return JSON.stringify(
-            (window as any)._e2eHelpers._getPageSliceState(),
-          );
-        }),
-      );
+      page.evaluate(() => {
+        const { getPageSliceState } = window._nsmE2e!;
 
-    expect(await pageSliceState()).toEqual({
-      // block-reload should be true since we types
-      blockReload: true,
-      lifeCycleState: {
-        current: 'active',
-      },
-      location: {
-        pathname: `/ws/${wsName1}/test-note.md`,
-        search: '',
-      },
-      pendingNavigation: {
-        location: {
-          pathname: `/ws/${wsName1}/test-note.md`,
-          search: '',
-        },
-        preserve: false,
-        replaceHistory: false,
-      },
-    });
+        return getPageSliceState();
+      });
 
-    await page.waitForFunction(() => {
-      return (
-        (window as any)._e2eHelpers._getPageSliceState().blockReload === false
-      );
-    });
-  });
+    await sleep(50);
 
-  test('worker health check', async ({ page }) => {
-    await createWorkspace(page);
-    const result = JSON.parse(
-      await page.evaluate(async () =>
-        JSON.stringify(await (window as any)._e2eHelpers.e2eHealthCheck()),
-      ),
-    );
-    expect(result).toBe(true);
+    // block-reload should be true since we typed and
+    // have a enabled writeSlowDown too
+    expect((await pageSliceState())?.blockReload).toBe(true);
+
+    // after a while it should be set blockReload to false
+    await expect
+      .poll(async () => {
+        return (await pageSliceState())?.blockReload;
+      })
+      .toBe(false);
+
+    // type again to inspect the blockReload state changes
+    await page.keyboard.type('more', { delay: 10 });
+
+    await sleep();
+
+    await expect
+      .poll(async () => {
+        return (await pageSliceState())?.blockReload;
+      })
+      .toBe(true);
+
+    await expect
+      .poll(async () => {
+        return (await pageSliceState())?.blockReload;
+      })
+      .toBe(false);
   });
 });

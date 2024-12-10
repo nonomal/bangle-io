@@ -1,5 +1,5 @@
-import { BANGLE_HOT, isSafari } from '@bangle.io/config';
-import { assertNonWorkerGlobalScope } from '@bangle.io/utils';
+import { BANGLE_HOT } from '@bangle.io/config';
+import { assertNonWorkerGlobalScope, isSafari } from '@bangle.io/utils';
 
 assertNonWorkerGlobalScope();
 
@@ -7,6 +7,7 @@ export function checkModuleWorkerSupport() {
   // hot module reload aint working with workers
   if (BANGLE_HOT) {
     console.debug('BANGLE_HOT is on, disabling worker');
+
     return false;
   }
 
@@ -14,6 +15,7 @@ export function checkModuleWorkerSupport() {
   const options: any = {
     get type() {
       supportsModuleWorker = true;
+
       return 'module';
     },
   };

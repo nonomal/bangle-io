@@ -1,27 +1,30 @@
 import React from 'react';
 
-import { keyDisplayValue } from '@bangle.io/config';
-import { Extension } from '@bangle.io/extension-registry';
+import { Extension, getExtensionStore, nsmApi2 } from '@bangle.io/api';
+import { EXECUTE_SEARCH_OPERATION } from '@bangle.io/constants';
 import { SearchIcon } from '@bangle.io/ui-components';
+import { keyDisplayValue } from '@bangle.io/utils';
 
 import { SearchNotesSidebar } from './components/SearchNotesSidebar';
 import {
-  EXECUTE_SEARCH_OPERATION,
   extensionName,
-  SearchNotesExtensionState,
+  SEARCH_SIDEBAR_NAME,
   SHOW_SEARCH_SIDEBAR_OPERATION,
-  SIDEBAR_NAME,
 } from './constants';
-import { searchPlugin } from './editor-plugins';
-import { SearchNotesOperationHandler } from './SearchNotesOperationHandler';
+import {
+  searchEffects,
+  searchSlice,
+  updateExternalSearchQuery,
+} from './search-notes-slice';
 
 const key = 'Mod-F';
 
-const extension = Extension.create<SearchNotesExtensionState>({
+const extension = Extension.create({
   name: extensionName,
-  initialState: { searchQuery: '', pendingSearch: false, searchResults: null },
+
   application: {
-    ReactComponent: SearchNotesOperationHandler,
+    nsmSlices: [searchSlice],
+    nsmEffects: searchEffects,
     operations: [
       {
         name: SHOW_SEARCH_SIDEBAR_OPERATION,
@@ -34,19 +37,62 @@ const extension = Extension.create<SearchNotesExtensionState>({
         hidden: true,
       },
     ],
+    operationHandler() {
+      function showSidebar() {
+        const sidebar = nsmApi2.ui.uiState().sidebar;
+
+        if (sidebar === SEARCH_SIDEBAR_NAME) {
+          const inputEl = document.querySelector<HTMLInputElement>(
+            'input[aria-label="Search"]',
+          );
+          inputEl?.focus();
+          inputEl?.select();
+        } else {
+          nsmApi2.ui.changeSidebar(SEARCH_SIDEBAR_NAME);
+        }
+      }
+
+      return {
+        handle(operation, payload) {
+          const nsmStore = getExtensionStore(searchSlice);
+
+          switch (operation.name) {
+            case SHOW_SEARCH_SIDEBAR_OPERATION: {
+              showSidebar();
+
+              return true;
+            }
+            case EXECUTE_SEARCH_OPERATION: {
+              showSidebar();
+
+              if (typeof payload !== 'string') {
+                throw new Error(
+                  `Invalid payload for ${EXECUTE_SEARCH_OPERATION} operation`,
+                );
+              }
+
+              nsmStore.dispatch(updateExternalSearchQuery(payload));
+
+              return true;
+            }
+            default: {
+              return false;
+            }
+          }
+        },
+      };
+    },
     sidebars: [
       {
-        name: SIDEBAR_NAME,
-        title: '🔍 Search notes',
+        name: SEARCH_SIDEBAR_NAME,
+        title: 'Search notes',
         hint: `Search notes\n` + keyDisplayValue(key),
         activitybarIcon: React.createElement(SearchIcon, {}),
         ReactComponent: SearchNotesSidebar,
       },
     ],
   },
-  editor: {
-    plugins: [searchPlugin],
-  },
+  editor: {},
 });
 
 export default extension;

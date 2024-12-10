@@ -1,5 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
 
+import { withBangle as test } from '../fixture-with-bangle';
 import {
   clickItemInPalette,
   createNewNote,
@@ -9,18 +10,71 @@ import {
   getWsPathsShownInFilePalette,
   openWorkspacePalette,
   runOperation,
+  SELECTOR_TIMEOUT,
   sleep,
   waitForNotification,
 } from '../helpers';
 
-test.beforeEach(async ({ page, baseURL }, testInfo) => {
-  await page.goto(baseURL!, { waitUntil: 'networkidle' });
+test.beforeEach(async ({ bangleApp }, testInfo) => {
+  await bangleApp.open();
 });
 
-test.describe.parallel('workspaces', () => {
+test.describe('workspaces', () => {
+  for (const screenType of ['desktop', 'mobile']) {
+    test.describe(screenType + ':page ', () => {
+      test.beforeEach(async ({ page, bangleApp }, testInfo) => {
+        if (screenType === 'mobile') {
+          await page.setViewportSize({ width: 480, height: 960 });
+        }
+        await bangleApp.open();
+      });
+
+      test('new workspace modal', async ({ page }) => {
+        await runOperation(
+          page,
+          'operation::@bangle.io/core-extension:NEW_WORKSPACE',
+        );
+
+        await page.waitForSelector(
+          '.B-ui-components_dialog-content-container',
+          {
+            timeout: SELECTOR_TIMEOUT,
+          },
+        );
+
+        expect(await page.screenshot()).toMatchSnapshot({
+          maxDiffPixels: 20,
+        });
+      });
+
+      test('/landing no workspace', async ({ page }) => {
+        await page.goto('/landing', {
+          waitUntil: 'networkidle',
+        });
+        await sleep();
+
+        expect(await page.screenshot()).toMatchSnapshot({
+          maxDiffPixels: 20,
+        });
+      });
+
+      test('/ws/<home>', async ({ page }) => {
+        const [wsName] = await createWorkspace(page, 'test-workspace-1');
+
+        await page
+          .locator('[data-testid="app-app-entry_pages-empty-editor-page"]')
+          .waitFor();
+
+        await sleep();
+        expect(await page.screenshot()).toMatchSnapshot({
+          maxDiffPixels: 20,
+        });
+      });
+    });
+  }
+
   test('Create a new workspace when already in a workspace and go back', async ({
     page,
-    baseURL,
   }) => {
     const wsName1 = await createWorkspace(page);
     const n1 = await createNewNote(page, wsName1, 'file-1');
@@ -35,8 +89,9 @@ test.describe.parallel('workspaces', () => {
     expect(wsPathsOfWsName2).toEqual([]);
     await page.goBack({ waitUntil: 'networkidle' });
 
-    expect(await page.url()).toMatch(baseURL + '/ws/' + wsName1);
-    await getPrimaryEditorHandler(page);
+    await expect(page).toHaveURL(new RegExp('/ws/' + wsName1));
+
+    await getPrimaryEditorHandler(page, { focus: true });
 
     expect((await getWsPathsShownInFilePalette(page)).sort()).toEqual(
       [n2, n1].sort(),
@@ -50,7 +105,7 @@ test.describe.parallel('workspaces', () => {
 
     const wsName2 = await createWorkspace(page);
 
-    expect(await page.url()).toMatch(new RegExp(wsName2));
+    await expect(page).toHaveURL(new RegExp(wsName2));
 
     await sleep();
 
@@ -58,20 +113,14 @@ test.describe.parallel('workspaces', () => {
 
     const result = (await getItemsInPalette(page, { hasItems: true })).sort();
 
-    expect(result).toEqual(
-      [
-        `bangle-help-(helpfs)`,
-        wsName2 + '-(browser)',
-        wsName1 + '-(browser)',
-      ].sort(),
-    );
+    expect(result).toEqual([`bangle-help`, wsName2, wsName1].sort());
 
     await Promise.all([
       page.waitForNavigation(),
-      clickItemInPalette(page, wsName2 + '-(browser)'),
+      clickItemInPalette(page, wsName2),
     ]);
 
-    expect(await page.url()).toMatch(new RegExp(wsName2));
+    await expect(page).toHaveURL(new RegExp(wsName2));
   });
 
   test('persists workspaces after reload', async ({ page }) => {
@@ -80,20 +129,16 @@ test.describe.parallel('workspaces', () => {
     const wsName3 = await createWorkspace(page);
 
     await sleep();
-    await page.reload({ timeout: 8000, waitUntil: 'networkidle' });
+
+    await page.reload({ timeout: 8000, waitUntil: 'load' });
+
+    await page.getByText(wsName3).waitFor();
 
     await openWorkspacePalette(page);
 
     const result = (await getItemsInPalette(page, { hasItems: true })).sort();
 
-    expect(result).toEqual(
-      [
-        `bangle-help-(helpfs)`,
-        wsName3 + '-(browser)',
-        wsName2 + '-(browser)',
-        wsName1 + '-(browser)',
-      ].sort(),
-    );
+    expect(result).toEqual([`bangle-help`, wsName3, wsName2, wsName1].sort());
   });
 
   test('deleting workspace works', async ({ page }) => {
@@ -108,20 +153,19 @@ test.describe.parallel('workspaces', () => {
       page.waitForNavigation(),
       runOperation(
         page,
-        'operation::@bangle.io/core-operations:REMOVE_ACTIVE_WORKSPACE',
+        'operation::@bangle.io/core-extension:REMOVE_ACTIVE_WORKSPACE',
       ),
     ]);
 
     await waitForNotification(page, `Successfully removed ${wsName2}`);
 
-    expect(await page.url()).toMatch(new RegExp('help'));
+    await expect(page).toHaveURL(new RegExp(`/landing`));
+
     await sleep();
     await openWorkspacePalette(page);
 
     const result = (await getItemsInPalette(page, { hasItems: true })).sort();
 
-    expect(result).toEqual(
-      [`bangle-help-(helpfs)`, wsName1 + '-(browser)'].sort(),
-    );
+    expect(result).toEqual([`bangle-help`, wsName1].sort());
   });
 });

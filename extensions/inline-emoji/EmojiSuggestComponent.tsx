@@ -1,17 +1,14 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
 import reactDOM from 'react-dom';
 
-import type { EditorView } from '@bangle.dev/pm';
-import { PluginKey } from '@bangle.dev/pm';
+import type { EditorView, PluginKey } from '@bangle.dev/pm';
 import { useEditorViewContext, usePluginState } from '@bangle.dev/react';
-import {
-  GetEmojiGroupsType,
-  selectEmoji,
-} from '@bangle.dev/react-emoji-suggest/dist/emoji-suggest';
+import type { GetEmojiGroupsType } from '@bangle.dev/react-emoji-suggest';
 import {
   getSquareDimensions,
   resolveCounter,
-} from '@bangle.dev/react-emoji-suggest/dist/utils';
+  selectEmoji,
+} from '@bangle.dev/react-emoji-suggest';
 import { suggestTooltip } from '@bangle.dev/tooltip';
 
 import { UniversalPalette } from '@bangle.io/ui-components';
@@ -51,8 +48,11 @@ export function EmojiSuggest({
   } = usePluginState(suggestTooltipKey);
 
   return reactDOM.createPortal(
-    <div className="shadow-2xl bangle-io-emoji-suggest-container">
-      <div className="bangle-emoji-suggest" style={{ padding: palettePadding }}>
+    <div className="shadow-2xl bg-colorBgLayerFloat">
+      <div
+        className="bangle-emoji-suggest bg-colorBgLayerFloat text-colorNeutralText b-0"
+        style={{ padding: palettePadding }}
+      >
         <div
           style={{
             width: rowWidth,
@@ -76,7 +76,7 @@ export function EmojiSuggest({
           )}
         </div>
       </div>
-      <UniversalPalette.PaletteInfo className="bangle-io-palette-info">
+      <UniversalPalette.PaletteInfo className="bg-colorNeutralBgLayerFloat">
         <UniversalPalette.PaletteInfoItem>
           <kbd className="font-normal">←↑↓→</kbd> Navigate
         </UniversalPalette.PaletteInfoItem>

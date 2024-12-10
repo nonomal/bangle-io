@@ -1,9 +1,10 @@
 import React, { useCallback, useImperativeHandle } from 'react';
 
 import { CorePalette } from '@bangle.io/constants';
+import type { PaletteOnExecuteItem } from '@bangle.io/ui-components';
 import { NullIcon, UniversalPalette } from '@bangle.io/ui-components';
 
-import { ExtensionPaletteType } from './config';
+import type { ExtensionPaletteType } from './config';
 
 const identifierPrefix = '?';
 
@@ -27,10 +28,11 @@ const QuestionPaletteUIComponent: ExtensionPaletteType['ReactComponent'] =
         })
         .filter((obj) => strMatch(obj.title, query));
 
-      const onExecuteItem = useCallback(
+      const onExecuteItem = useCallback<PaletteOnExecuteItem>(
         (getUid, sourceInfo) => {
           const uid = getUid(items);
           const item = items.find((item) => item.uid === uid);
+
           if (item) {
             updatePalette(item.data.type);
           }
@@ -89,6 +91,7 @@ export const questionPalette: ExtensionPaletteType = {
     if (identifierPrefix && rawQuery.startsWith(identifierPrefix)) {
       return rawQuery.slice(1);
     }
+
     return null;
   },
   ReactComponent: QuestionPaletteUIComponent,
@@ -96,10 +99,12 @@ export const questionPalette: ExtensionPaletteType = {
 
 function strMatch(a: string[] | string, b: string): boolean {
   b = b.toLocaleLowerCase();
+
   if (Array.isArray(a)) {
     return a.filter(Boolean).some((str) => strMatch(str, b));
   }
 
   a = a.toLocaleLowerCase();
+
   return a.includes(b) || b.includes(a);
 }

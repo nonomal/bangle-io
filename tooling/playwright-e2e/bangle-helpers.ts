@@ -1,5 +1,6 @@
 export function splitWsPath(wsPath: string): [string, string] {
   const [wsName, filePath] = wsPath.split(':');
+
   if (!wsName) {
     throw new Error('Invalid wsName');
   }
@@ -15,10 +16,11 @@ export function getLast<T>(array: T[]): T | undefined {
   return array[array.length - 1];
 }
 
-export function removeMdExtension(str: string) {
+export function removeExtension(str: string) {
   if (str.endsWith('.md')) {
     return str.slice(0, -3);
   }
+
   return str;
 }
 
@@ -37,12 +39,13 @@ export function resolvePath(wsPath: string) {
     .slice(0, filePathSplitted.length - 1)
     .filter(Boolean)
     .join('/');
+
   return {
     wsName,
     filePath, // wsName:filePath
     dirPath, // wsName:dirPath/fileName
     fileName,
-    fileNameWithoutExt: removeMdExtension(fileName),
+    fileNameWithoutExt: removeExtension(fileName),
   };
 }
 
@@ -50,5 +53,6 @@ export function filePathToWsPath(wsName: string, filePath: string) {
   if (filePath.startsWith('/')) {
     filePath = filePath.slice(1);
   }
+
   return wsName + ':' + filePath;
 }

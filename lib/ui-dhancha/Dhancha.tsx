@@ -1,6 +1,9 @@
 import './style.css';
 
-import React, { ReactNode, useRef } from 'react';
+import type { ReactNode } from 'react';
+import React, { useRef } from 'react';
+
+import { vars } from '@bangle.io/css-vars';
 
 import { useStickyNavigation } from './use-sticky-navigation';
 
@@ -26,34 +29,75 @@ export function Dhancha({
 
   useStickyNavigation(widescreen, activitybarRef);
 
+  const mainChild = (
+    <main
+      className={
+        'B-ui-dhancha_main-content' + (widescreen ? ' BU_widescreen' : '')
+      }
+    >
+      {mainContent}
+    </main>
+  );
+
+  let childContent;
+
+  if (widescreen) {
+    childContent = (
+      <>
+        {workspaceSidebar && (
+          <header
+            style={{
+              width: vars.misc.workspaceSidebarWidth,
+            }}
+            className="z-5 flex-shrink-0 h-screen border-r-1 border-colorNeutralBorder"
+          >
+            {workspaceSidebar}
+          </header>
+        )}
+        {mainChild}
+      </>
+    );
+  }
+  // if mobile either show wSidebar or mainChild
+  else {
+    childContent = <>{workspaceSidebar ? workspaceSidebar : mainChild}</>;
+  }
+
   return (
-    <div className={'ui-dhancha_container' + (widescreen ? ' widescreen' : '')}>
+    <div
+      className={
+        'B-ui-dhancha_container' + (widescreen ? ' BU_widescreen' : '')
+      }
+    >
       <div
         role="navigation"
         aria-label="Activity Bar"
         ref={activitybarRef}
-        className={'ui-dhancha_activitybar' + (widescreen ? ' widescreen' : '')}
+        className={
+          'B-ui-dhancha_activitybar' + (widescreen ? ' BU_widescreen' : '')
+        }
       >
         {activitybar}
       </div>
-      {widescreen && workspaceSidebar && (
-        <header className="ui-dhancha_ws-sidebar">{workspaceSidebar}</header>
-      )}
 
-      <main
-        className={
-          'ui-dhancha_main-content' + (widescreen ? ' widescreen' : '')
-        }
-      >
-        {mainContent}
-      </main>
+      {childContent}
+
       {widescreen && noteSidebar && (
-        <aside className="ui-dhancha_note-sidebar">{noteSidebar}</aside>
+        <aside
+          className="B-ui-dhancha_note-sidebar shrink-0 h-screen z-5 border-l-1 border-colorNeutralBorder"
+          style={{
+            width: vars.misc.noteSidebarWidth,
+          }}
+        >
+          {noteSidebar}
+        </aside>
       )}
     </div>
   );
 }
 
 export function MultiColumnMainContent({ children }: { children: ReactNode }) {
-  return <div className="ui-dhancha_multi-column-main-content">{children}</div>;
+  return (
+    <div className="B-ui-dhancha_multi-column-main-content">{children}</div>
+  );
 }

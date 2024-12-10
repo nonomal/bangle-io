@@ -15,3 +15,7 @@ node_modules
 
 coverage-summary.json
 tsconfig.tsbuildinfo
+
+# playwright
+playwright-report
+playwright/.cache/

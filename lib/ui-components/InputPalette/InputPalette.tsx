@@ -64,7 +64,7 @@ export function InputPalette({
   };
 
   useEffect(() => {
-    updateError?.(undefined);
+    updateError(undefined);
     updateSpinner(false);
   }, [inputValue, updateError]);
 
@@ -83,6 +83,7 @@ export function InputPalette({
       const uid = getUid(items);
 
       let resolved = false;
+
       if (uid === 'input-confirm' && !error) {
         sleep(250).then(() => {
           if (!resolved) {
@@ -149,9 +150,7 @@ export function InputPalette({
             item={errorItem}
             isActive={false}
             onClick={() => {}}
-            style={{
-              backgroundColor: 'var(--error-bgColor)',
-            }}
+            className="bg-colorCriticalSolidFaint"
           />
         )}
       </UniversalPalette.PaletteItemsContainer>

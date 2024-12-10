@@ -1,7 +1,4 @@
-export { calculateGitFileSha } from './calculate-git-file-sha';
+export * from './entry-helpers';
 export type { ErrorCodeType } from './errors';
 export * as ErrorCode from './errors';
-export {
-  LocalFileEntryManager,
-  RemoteFileEntry,
-} from './local-file-entry-manager';
+export { fileSync } from './file-sync';
